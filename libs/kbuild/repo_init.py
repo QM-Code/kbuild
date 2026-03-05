@@ -61,7 +61,9 @@ def load_initialize_repo_config(repo_root: str) -> dict[str, object]:
     git_auth = git_auth_raw.strip()
 
     cmake_raw = raw.get("cmake")
+    cmake_enabled = cmake_raw is not None
     cmake_minimum_version = "3.20"
+    cmake_dependency_packages: list[str] = []
     sdk_enabled = False
     sdk_package_name = ""
     if cmake_raw is not None:
@@ -83,6 +85,17 @@ def load_initialize_repo_config(repo_root: str) -> dict[str, object]:
             sdk_enabled = True
             sdk_package_name = sdk_package_name_raw.strip()
 
+        dependencies_raw = cmake_raw.get("dependencies", {})
+        if not isinstance(dependencies_raw, dict):
+            errors.die("kbuild.json key 'cmake.dependencies' must be an object when defined")
+        for dependency_name_raw, dependency_value_raw in dependencies_raw.items():
+            if not isinstance(dependency_name_raw, str) or not dependency_name_raw.strip():
+                errors.die("kbuild.json key 'cmake.dependencies' has an invalid package name")
+            dependency_name = dependency_name_raw.strip()
+            if not isinstance(dependency_value_raw, dict):
+                errors.die(f"kbuild.json key 'cmake.dependencies.{dependency_name}' must be an object")
+            cmake_dependency_packages.append(dependency_name)
+
     vcpkg_raw = raw.get("vcpkg")
     vcpkg_dependencies: list[str] = []
     if vcpkg_raw is not None:
@@ -102,7 +115,9 @@ def load_initialize_repo_config(repo_root: str) -> dict[str, object]:
         "project_id": project_id,
         "git_url": git_url,
         "git_auth": git_auth,
+        "cmake_enabled": cmake_enabled,
         "cmake_minimum_version": cmake_minimum_version,
+        "cmake_dependency_packages": cmake_dependency_packages,
         "sdk_enabled": sdk_enabled,
         "sdk_package_name": sdk_package_name,
         "vcpkg_dependencies": vcpkg_dependencies,
@@ -168,16 +183,38 @@ def render_template(templates_root: str, template_name: str, values: dict[str, s
     return text
 
 
+def build_cmake_dependency_finds(packages: list[str]) -> str:
+    if not packages:
+        return "# No explicit dependencies defined in kbuild.json cmake.dependencies."
+    return "\n".join(f"find_package({package_name} CONFIG REQUIRED)" for package_name in packages)
+
+
 def initialize_repo_layout(repo_root: str, templates_root: str) -> int:
     config = load_initialize_repo_config(repo_root)
     ensure_initialize_repo_root_empty(repo_root)
 
     project_title = str(config["project_title"])
     project_id = str(config["project_id"])
+    project_id_upper = project_id.upper()
+    project_sources_var = f"{project_id_upper}_SOURCES"
+    cmake_enabled = bool(config["cmake_enabled"])
     cmake_minimum_version = str(config["cmake_minimum_version"])
+    cmake_dependency_packages = list(config["cmake_dependency_packages"])
     sdk_enabled = bool(config["sdk_enabled"])
     sdk_package_name = str(config["sdk_package_name"])
     vcpkg_dependencies = list(config["vcpkg_dependencies"])
+
+    option_build_shared = ""
+    include_install_export = ""
+    if sdk_enabled:
+        option_build_shared = (
+            f'option({project_id_upper}_BUILD_SHARED "Build {project_id} as a shared library" OFF)'
+        )
+        include_install_export = (
+            'if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/cmake/50_install_export.cmake")\n'
+            '    include("${CMAKE_CURRENT_LIST_DIR}/cmake/50_install_export.cmake")\n'
+            "endif()"
+        )
 
     created_dirs: list[str] = []
     created_files: list[str] = []
@@ -191,6 +228,8 @@ def initialize_repo_layout(repo_root: str, templates_root: str) -> int:
         os.path.join(repo_root, "tests"),
         os.path.join(repo_root, "vcpkg"),
     ]
+    if cmake_enabled:
+        directory_order.append(os.path.join(repo_root, "cmake", "tests"))
     if sdk_enabled:
         directory_order.extend(
             [
@@ -209,6 +248,8 @@ def initialize_repo_layout(repo_root: str, templates_root: str) -> int:
         {
             "CMAKE_MINIMUM_VERSION": cmake_minimum_version,
             "PROJECT_ID": project_id,
+            "OPTION_BUILD_SHARED": option_build_shared,
+            "INCLUDE_INSTALL_EXPORT": include_install_export,
         },
     )
 
@@ -221,10 +262,36 @@ def initialize_repo_layout(repo_root: str, templates_root: str) -> int:
     )
 
     bootstrap_content = render_template(templates_root, "agent_BOOTSTRAP.md.tpl", {})
+    cmake_tests_content = render_template(templates_root, "cmake_tests_CMakeLists.txt.tpl", {})
+    cmake_toolchain_content = render_template(templates_root, "cmake_00_toolchain.cmake.tpl", {})
+    cmake_dependencies_content = render_template(
+        templates_root,
+        "cmake_10_dependencies.cmake.tpl",
+        {"DEPENDENCY_FINDS": build_cmake_dependency_finds(cmake_dependency_packages)},
+    )
+    cmake_targets_content = render_template(
+        templates_root,
+        "cmake_20_targets_sdk.cmake.tpl" if sdk_enabled else "cmake_20_targets_app.cmake.tpl",
+        {
+            "PROJECT_ID": project_id,
+            "PROJECT_ID_UPPER": project_id_upper,
+            "PROJECT_SOURCES_VAR": project_sources_var,
+        },
+    )
+    cmake_install_export_content = ""
+    if sdk_enabled:
+        cmake_install_export_content = render_template(
+            templates_root,
+            "cmake_50_install_export.cmake.tpl",
+            {
+                "PROJECT_ID": project_id,
+                "SDK_PACKAGE_NAME": sdk_package_name,
+            },
+        )
 
     optional_include = ""
     if sdk_enabled:
-        optional_include = f"#include <{project_id}.hpp>\\n\\n"
+        optional_include = f"#include <{project_id}.hpp>\n\n"
     src_cpp_content = render_template(
         templates_root,
         "src_project.cpp.tpl",
@@ -265,6 +332,34 @@ def initialize_repo_layout(repo_root: str, templates_root: str) -> int:
             vcpkg_configuration_content,
         ),
     ]
+    if cmake_enabled:
+        files_to_write.extend(
+            [
+                (
+                    os.path.join(repo_root, "cmake", "00_toolchain.cmake"),
+                    cmake_toolchain_content,
+                ),
+                (
+                    os.path.join(repo_root, "cmake", "10_dependencies.cmake"),
+                    cmake_dependencies_content,
+                ),
+                (
+                    os.path.join(repo_root, "cmake", "20_targets.cmake"),
+                    cmake_targets_content,
+                ),
+                (
+                    os.path.join(repo_root, "cmake", "tests", "CMakeLists.txt"),
+                    cmake_tests_content,
+                ),
+            ]
+        )
+        if sdk_enabled:
+            files_to_write.append(
+                (
+                    os.path.join(repo_root, "cmake", "50_install_export.cmake"),
+                    cmake_install_export_content,
+                )
+            )
 
     if sdk_enabled:
         include_header_content = render_template(

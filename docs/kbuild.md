@@ -22,7 +22,7 @@ If you are an agent and need a deterministic “do the right thing” sequence, 
 4. If the task is “set up git remote”, run `./kbuild.py --initialize-git`.
 5. If `kbuild.json` contains `vcpkg`, run `./kbuild.py --install-vcpkg` once.
 6. For normal development builds, run `./kbuild.py`.
-7. For demo validation, run `./kbuild.py --build-demos`.
+7. For explicit demo-only validation, run `./kbuild.py --build-demos`.
 8. For fast rebuild loops, run `./kbuild.py --no-configure` (and `--build-demos --no-configure` as needed).
 
 ### Agent-safe default command sequence
@@ -30,14 +30,14 @@ If you are an agent and need a deterministic “do the right thing” sequence, 
 For most repos that already have config and CMake:
 
 ```bash
-./kbuild.py && ./kbuild.py --build-demos
+./kbuild.py
 ```
 
 For repos with local vcpkg not yet prepared:
 
 ```bash
 ./kbuild.py --install-vcpkg
-./kbuild.py && ./kbuild.py --build-demos
+./kbuild.py
 ```
 
 ### Agent “do not guess” rules
@@ -45,7 +45,7 @@ For repos with local vcpkg not yet prepared:
 - Do not invent new keys in `kbuild.json`; unknown keys hard-fail.
 - Do not run mutually exclusive operational flags together.
 - Do not use `--no-configure` unless a cache already exists.
-- Do not assume demo names; use explicit names or `build.defaults.demos`.
+- Do not assume demo names; use explicit names, `build.demos`, or `build.defaults.demos`.
 
 ## 1) Mental Model
 
@@ -130,7 +130,7 @@ Builds demos after core SDK build succeeds.
 
 Behavior:
 - If demo names are provided, those demos are built in the provided order.
-- If no demo names are provided, it uses `kbuild.json -> build.defaults.demos`.
+- If no demo names are provided, it uses `kbuild.json -> build.demos`.
 - Demo tokens are normalized so `executable` and `demo/executable` both resolve.
 - Requires `cmake.sdk.package_name` to be present.
 
@@ -164,6 +164,21 @@ Example:
 ./kbuild.py --no-configure
 ```
 
+### `--rebuild`
+
+Removes existing build directories for the selected version before build work begins.
+
+Behavior:
+- Always clears `build/<version>/` when it exists.
+- Also clears demo build dirs (`demo/<name>/build/<version>/`) for demos selected in this run.
+- Forces a configure pass for the run.
+
+Example:
+
+```bash
+./kbuild.py --rebuild
+```
+
 ### `--create-config`
 
 Creates a starter `kbuild.json` template in the current directory. This only works when `kbuild.json` does not already exist, and it cannot be combined with other options.
@@ -183,6 +198,10 @@ It creates directories and starter files such as:
 - `README.md`
 - `.gitignore`
 - `agent/BOOTSTRAP.md`
+- `cmake/tests/CMakeLists.txt` (when `cmake` is defined in `kbuild.json`)
+- `cmake/00_toolchain.cmake` (when `cmake` is defined in `kbuild.json`)
+- `cmake/10_dependencies.cmake` (when `cmake` is defined in `kbuild.json`)
+- `cmake/20_targets.cmake` (when `cmake` is defined in `kbuild.json`)
 - `src/<project_id>.cpp`
 - `vcpkg/vcpkg.json`
 - `vcpkg/vcpkg-configuration.json`
@@ -258,6 +277,7 @@ Example:
 - `--initialize-git` cannot be combined with other modes.
 - `--git-sync` cannot be combined with other modes.
 - `--sync-vcpkg-baseline` must run alone.
+- `--rebuild` requires configure mode (it fails when `--no-configure` is the effective configure setting).
 
 If both `--configure` and `--no-configure` are provided, the last one on the command line wins.
 
@@ -287,7 +307,7 @@ Commands:
 Build core SDK and then demos in default order:
 
 ```bash
-./kbuild.py && ./kbuild.py --build-demos
+./kbuild.py
 ```
 
 Fast rebuild without reconfigure:
@@ -368,6 +388,11 @@ then `{version}` becomes `dev` in this example.
     ]
   },
   "build": {
+    "demos": [
+      "libraries/alpha",
+      "libraries/beta",
+      "executable"
+    ],
     "defaults": {
       "demos": [
         "libraries/alpha",
@@ -433,7 +458,7 @@ Optional object.
 Required when `cmake.sdk` exists. Non-empty string naming the exported CMake package (for example `KcliSDK`).
 
 Important:
-- `--build-demos` requires this metadata.
+- All demo builds require this metadata (`--build-demos` and `build.defaults.demos` on plain `./kbuild.py`).
 - The value is used to generate and pass `-D<PackageName>_DIR` hints.
 
 ### `cmake.dependencies`
@@ -476,13 +501,17 @@ Package install resolution happens later via CMake + manifest mode.
 
 ## `build` object
 
+### `build.demos`
+
+Optional array of non-empty strings. Used by `./kbuild.py --build-demos` when no explicit demo names are provided.
+
 ### `build.defaults`
 
 Optional object for default build behavior values.
 
 ### `build.defaults.demos`
 
-Optional array of non-empty strings. Used when `--build-demos` is provided with no explicit demo names.
+Optional array of non-empty strings. Used by plain `./kbuild.py` (no `--build-demos`) to auto-build demos after core build succeeds.
 
 ## 8) Multi-SDK Demo Orchestration Deep Dive
 
@@ -535,7 +564,14 @@ Generated structure always includes:
 - `src/<project_id>.cpp`
 - `vcpkg/vcpkg.json`, `vcpkg/vcpkg-configuration.json`
 
+If `cmake` is defined in `kbuild.json`, it also generates:
+- `cmake/tests/CMakeLists.txt`
+- `cmake/00_toolchain.cmake`
+- `cmake/10_dependencies.cmake`
+- `cmake/20_targets.cmake`
+
 If `cmake.sdk.package_name` is defined, it also generates:
+- `cmake/50_install_export.cmake`
 - `include/<project_id>.hpp`
 - `cmake/<PackageName>Config.cmake.in`
 
@@ -580,7 +616,7 @@ Run with configure once, then retry:
 ./kbuild.py --configure
 ```
 
-### `--build-demos requires SDK metadata`
+### `demo builds require SDK metadata`
 
 Define `cmake.sdk.package_name` in `kbuild.json`.
 
@@ -621,14 +657,13 @@ Scaffold from zero:
 Core build + demos (default slot):
 
 ```bash
-./kbuild.py && ./kbuild.py --build-demos
+./kbuild.py
 ```
 
 Core build + demos (custom slot):
 
 ```bash
 ./kbuild.py --version dev
-./kbuild.py --version dev --build-demos
 ```
 
 Install/update local vcpkg then build:

@@ -23,9 +23,10 @@ def usage(exit_code: int = 1) -> None:
     print("  --remove-latest     remove every build/latest/ directory", file=sys.stderr)
     print("  --version <name>    build version slot under build/ (default: latest)", file=sys.stderr)
     print(
-        "  --build-demos [demo ...]  build demos in order; with no args uses kbuild.json build.defaults.demos",
+        "  --build-demos [demo ...]  build demos in order; with no args uses kbuild.json build.demos",
         file=sys.stderr,
     )
+    print("  --rebuild          remove existing build directory/directories before building", file=sys.stderr)
     print("  --configure         force cmake configure step", file=sys.stderr)
     print("  --no-configure      skip cmake configure step", file=sys.stderr)
     print("  --create-config     create a starter kbuild.json template", file=sys.stderr)
@@ -84,6 +85,7 @@ def main(
     install_vcpkg = False
     sync_vcpkg_baseline_only = False
     build_demos = False
+    rebuild = False
     list_builds = False
     remove_latest_builds = False
     initialize_repo = False
@@ -130,6 +132,8 @@ def main(
                 requested_demos.append(args[i])
                 i += 1
             continue
+        elif arg == "--rebuild":
+            rebuild = True
         elif arg == "--configure":
             configure_override = True
             configure_flag_seen = True
@@ -151,6 +155,8 @@ def main(
         build_mode_flags.append("--build-demos")
     if configure_flag_seen:
         build_mode_flags.append("--configure/--no-configure")
+    if rebuild:
+        build_mode_flags.append("--rebuild")
     if install_vcpkg:
         build_mode_flags.append("--install-vcpkg")
 
@@ -233,6 +239,7 @@ def main(
         configure_by_default,
         has_vcpkg,
         config_build_demos,
+        config_default_build_demos,
         config_sdk_dependencies,
     ) = config_ops.load_kbuild_config(repo_root)
 
@@ -253,22 +260,41 @@ def main(
 
     sdk_dependencies = build_ops.resolve_sdk_dependencies(repo_root, version, config_sdk_dependencies)
     configure = configure_by_default if configure_override is None else configure_override
+    if rebuild:
+        if configure_override is False:
+            fail("--rebuild cannot be combined with --no-configure")
+        configure = True
 
     demo_order: list[str] = []
     if build_demos:
-        if not cmake_package_name:
-            fail(
-                "--build-demos requires SDK metadata; define cmake.sdk.package_name in kbuild.json"
-            )
         if requested_demos:
             demo_order = [build_ops.normalize_demo_name(token) for token in requested_demos]
         else:
             if not config_build_demos:
-                fail("kbuild.json must define 'build.defaults.demos' for --build-demos with no demo arguments")
+                fail("kbuild.json must define 'build.demos' for --build-demos with no demo arguments")
             demo_order = [build_ops.normalize_demo_name(token) for token in config_build_demos]
+    elif config_default_build_demos:
+        demo_order = [build_ops.normalize_demo_name(token) for token in config_default_build_demos]
 
+    if demo_order:
+        if not cmake_package_name:
+            fail(
+                "demo builds require SDK metadata; define cmake.sdk.package_name in kbuild.json"
+            )
         for demo_name in demo_order:
             build_ops.resolve_demo_source_dir(repo_root, demo_name)
+
+    if rebuild:
+        removed = 0
+        core_build_dir = os.path.join(repo_root, "build", version)
+        if build_ops.remove_version_build_dir(core_build_dir, repo_root):
+            removed += 1
+        for demo_name in demo_order:
+            demo_build_dir = os.path.join(repo_root, "demo", demo_name, "build", version)
+            if build_ops.remove_version_build_dir(demo_build_dir, repo_root):
+                removed += 1
+        if removed == 0:
+            print(f"no existing build directories found for --rebuild (version={version})")
 
     build_dir = os.path.join("build", version)
 
@@ -324,7 +350,7 @@ def main(
 
     print(f"Build complete -> dir={build_dir} | sdk={install_prefix}")
 
-    if build_demos:
+    if demo_order:
         for demo_name in demo_order:
             demo_ops.build_demo(
                 repo_root=repo_root,

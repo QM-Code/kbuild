@@ -43,6 +43,12 @@ def list_build_dirs(repo_root: str) -> int:
 
 
 def is_safe_latest_build_dir(path: str, repo_root: str) -> bool:
+    if os.path.basename(os.path.abspath(path).rstrip("/\\")) != "latest":
+        return False
+    return is_safe_version_build_dir(path, repo_root)
+
+
+def is_safe_version_build_dir(path: str, repo_root: str) -> bool:
     path_abs = os.path.abspath(path)
     repo_root_abs = os.path.abspath(repo_root)
     rel = os.path.relpath(path_abs, repo_root_abs).replace("\\", "/")
@@ -50,11 +56,27 @@ def is_safe_latest_build_dir(path: str, repo_root: str) -> bool:
         return False
 
     parts = [part for part in rel.split("/") if part not in ("", ".")]
-    if parts == ["build", "latest"]:
+    if len(parts) == 2 and parts[0] == "build":
         return True
-    if len(parts) >= 4 and parts[0] == "demo" and parts[-2:] == ["build", "latest"]:
+    if len(parts) >= 4 and parts[0] == "demo" and parts[-2] == "build":
         return True
     return False
+
+
+def remove_version_build_dir(path: str, repo_root: str) -> bool:
+    target = os.path.abspath(path)
+    if not os.path.exists(target):
+        return False
+    if not os.path.isdir(target):
+        errors.die(f"expected build directory path is not a directory: {target}", code=1)
+    if os.path.islink(target):
+        errors.die(f"refusing to remove symlinked build directory: {target}", code=1)
+    if not is_safe_version_build_dir(target, repo_root):
+        errors.die(f"refusing to remove unexpected build directory: {target}", code=1)
+
+    shutil.rmtree(target)
+    print(f"removed {format_dir_for_output(target, repo_root)}")
+    return True
 
 
 def remove_latest_build_dirs(repo_root: str) -> int:
@@ -64,11 +86,8 @@ def remove_latest_build_dirs(repo_root: str) -> int:
             continue
         if not is_safe_latest_build_dir(path, repo_root):
             errors.die(f"refusing to remove unexpected latest directory: {path}", code=1)
-        if os.path.islink(path):
-            errors.die(f"refusing to remove symlinked latest directory: {path}", code=1)
-        shutil.rmtree(path)
-        removed += 1
-        print(f"removed {format_dir_for_output(path, repo_root)}")
+        if remove_version_build_dir(path, repo_root):
+            removed += 1
 
     if removed == 0:
         print("no build/latest/ directories found")

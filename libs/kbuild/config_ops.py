@@ -7,7 +7,7 @@ from . import errors
 
 def load_kbuild_config(
     repo_root: str,
-) -> tuple[bool, str, bool, bool, list[str], list[tuple[str, str]]]:
+) -> tuple[bool, str, bool, bool, list[str], list[str], list[tuple[str, str]]]:
     config_path = os.path.join(repo_root, "kbuild.json")
     if not os.path.isfile(config_path):
         errors.die(
@@ -142,38 +142,48 @@ def load_kbuild_config(
             if not isinstance(dep, str) or not dep.strip():
                 errors.die(f"kbuild.json key 'vcpkg.dependencies[{idx}]' must be a non-empty string")
 
-    default_demos: list[str] = []
+    build_demos: list[str] = []
+    default_build_demos: list[str] = []
     build_raw = raw.get("build")
     if build_raw is not None:
         if not isinstance(build_raw, dict):
             errors.die("kbuild.json key 'build' must be an object")
-        allowed_build = {"defaults"}
+        allowed_build = {"demos", "defaults"}
         for key in build_raw:
             if key not in allowed_build:
                 errors.die(f"unexpected key in kbuild.json 'build': '{key}'")
 
+        demos_raw = build_raw.get("demos", [])
+        if not isinstance(demos_raw, list):
+            errors.die("kbuild.json key 'build.demos' must be an array when defined")
+        for idx, item in enumerate(demos_raw):
+            if not isinstance(item, str) or not item.strip():
+                errors.die(f"kbuild.json key 'build.demos[{idx}]' must be a non-empty string")
+            build_demos.append(item.strip())
+
         defaults_raw = build_raw.get("defaults", {})
         if not isinstance(defaults_raw, dict):
             errors.die("kbuild.json key 'build.defaults' must be an object when defined")
-        allowed_defaults = {"demos"}
+        allowed_build_defaults = {"demos"}
         for key in defaults_raw:
-            if key not in allowed_defaults:
+            if key not in allowed_build_defaults:
                 errors.die(f"unexpected key in kbuild.json 'build.defaults': '{key}'")
 
-        demos_raw = defaults_raw.get("demos", [])
-        if not isinstance(demos_raw, list):
+        default_demos_raw = defaults_raw.get("demos", [])
+        if not isinstance(default_demos_raw, list):
             errors.die("kbuild.json key 'build.defaults.demos' must be an array when defined")
-        for idx, item in enumerate(demos_raw):
+        for idx, item in enumerate(default_demos_raw):
             if not isinstance(item, str) or not item.strip():
                 errors.die(f"kbuild.json key 'build.defaults.demos[{idx}]' must be a non-empty string")
-            default_demos.append(item.strip())
+            default_build_demos.append(item.strip())
 
     return (
         has_cmake,
         cmake_package_name,
         configure_by_default,
         has_vcpkg,
-        default_demos,
+        build_demos,
+        default_build_demos,
         sdk_dependencies,
     )
 
@@ -215,9 +225,10 @@ def create_kbuild_config_template(repo_root: str, kbuild_root_value: str) -> int
             "dependencies": [],
         },
         "build": {
+            "demos": [],
             "defaults": {
                 "demos": [],
-            }
+            },
         },
     }
     _write_json_object(config_path, payload)

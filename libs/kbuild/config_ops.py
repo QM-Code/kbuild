@@ -1,13 +1,51 @@
 import json
 import os
 import re
+import sys
 
 from . import errors
+
+VALID_BUILD_TYPES = {"static", "shared", "both"}
+
+
+def default_build_type_for_host() -> str:
+    platform_name = sys.platform.lower()
+    if (
+        platform_name.startswith("linux")
+        or platform_name.startswith("darwin")
+        or platform_name.startswith("win")
+        or platform_name.startswith("cygwin")
+        or platform_name.startswith("msys")
+    ):
+        return "shared"
+    return "static"
+
+
+def parse_build_type(*, value: object, key_path: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        errors.die(f"kbuild.json key '{key_path}' must be a non-empty string")
+    build_type = value.strip().lower()
+    if build_type not in VALID_BUILD_TYPES:
+        allowed = ", ".join(sorted(VALID_BUILD_TYPES))
+        errors.die(f"kbuild.json key '{key_path}' must be one of: {allowed}")
+    return build_type
 
 
 def load_kbuild_config(
     repo_root: str,
-) -> tuple[bool, str, str, bool, bool, list[str], list[str], list[tuple[str, str]]]:
+) -> tuple[
+    str,
+    bool,
+    str,
+    str,
+    bool,
+    bool,
+    list[str],
+    list[str],
+    int,
+    str,
+    list[tuple[str, str]],
+]:
     config_path = os.path.join(repo_root, "kbuild.json")
     if not os.path.isfile(config_path):
         errors.die(
@@ -146,14 +184,25 @@ def load_kbuild_config(
 
     build_demos: list[str] = []
     default_build_demos: list[str] = []
+    build_jobs = 4
+    build_type = default_build_type_for_host()
     build_raw = raw.get("build")
     if build_raw is not None:
         if not isinstance(build_raw, dict):
             errors.die("kbuild.json key 'build' must be an object")
-        allowed_build = {"demos", "defaults"}
+        allowed_build = {"jobs", "type", "demos", "defaults"}
         for key in build_raw:
             if key not in allowed_build:
                 errors.die(f"unexpected key in kbuild.json 'build': '{key}'")
+
+        if "jobs" in build_raw:
+            jobs_raw = build_raw.get("jobs")
+            if not isinstance(jobs_raw, int) or isinstance(jobs_raw, bool) or jobs_raw < 1:
+                errors.die("kbuild.json key 'build.jobs' must be a positive integer")
+            build_jobs = jobs_raw
+
+        if "type" in build_raw:
+            build_type = parse_build_type(value=build_raw.get("type"), key_path="build.type")
 
         demos_raw = build_raw.get("demos", [])
         if not isinstance(demos_raw, list):
@@ -180,6 +229,7 @@ def load_kbuild_config(
             default_build_demos.append(item.strip())
 
     return (
+        project_id,
         has_cmake,
         cmake_minimum_version,
         cmake_package_name,
@@ -187,6 +237,8 @@ def load_kbuild_config(
         has_vcpkg,
         build_demos,
         default_build_demos,
+        build_jobs,
+        build_type,
         sdk_dependencies,
     )
 
@@ -228,6 +280,8 @@ def create_kbuild_config_template(repo_root: str, kbuild_root_value: str) -> int
             "dependencies": [],
         },
         "build": {
+            "jobs": 4,
+            "type": default_build_type_for_host(),
             "demos": [],
             "defaults": {
                 "demos": [],

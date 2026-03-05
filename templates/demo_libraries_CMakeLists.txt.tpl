@@ -9,30 +9,79 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-if(NOT TARGET {{PROJECT_ID}}::sdk)
+option(KTOOLS_DEMO_BUILD_STATIC "Build demo static library target" ON)
+option(KTOOLS_DEMO_BUILD_SHARED "Build demo shared library target" ON)
+
+if(NOT KTOOLS_DEMO_BUILD_STATIC AND NOT KTOOLS_DEMO_BUILD_SHARED)
+    message(FATAL_ERROR "Demo library requires at least one of KTOOLS_DEMO_BUILD_STATIC or KTOOLS_DEMO_BUILD_SHARED to be ON.")
+endif()
+
+if(NOT TARGET {{PROJECT_ID}}::sdk_shared)
     find_package({{SDK_PACKAGE_NAME}} CONFIG REQUIRED)
 endif()
 include(CMakePackageConfigHelpers)
 
-add_library({{LIBRARY_ID}}_sdk STATIC
-    src/main.cpp
-)
-add_library({{LIBRARY_ID}}::sdk ALIAS {{LIBRARY_ID}}_sdk)
+set(_{{LIBRARY_ID}}_sdk_static_dep {{PROJECT_ID}}::sdk_static)
+if(NOT TARGET {{PROJECT_ID}}::sdk_static)
+    set(_{{LIBRARY_ID}}_sdk_static_dep {{PROJECT_ID}}::sdk)
+endif()
 
-target_include_directories({{LIBRARY_ID}}_sdk
-    PUBLIC
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-        $<INSTALL_INTERFACE:include>
-)
+set(_{{LIBRARY_ID}}_sdk_shared_dep {{PROJECT_ID}}::sdk_shared)
+if(NOT TARGET {{PROJECT_ID}}::sdk_shared)
+    set(_{{LIBRARY_ID}}_sdk_shared_dep {{PROJECT_ID}}::sdk)
+endif()
 
-target_link_libraries({{LIBRARY_ID}}_sdk PUBLIC {{PROJECT_ID}}::sdk)
+set(_{{LIBRARY_ID}}_install_targets)
 
-set_target_properties({{LIBRARY_ID}}_sdk PROPERTIES
-    OUTPUT_NAME {{LIBRARY_ID}}
-    EXPORT_NAME sdk
-)
+if(KTOOLS_DEMO_BUILD_STATIC)
+    add_library({{LIBRARY_ID}}_sdk_static STATIC
+        src/main.cpp
+    )
+    add_library({{LIBRARY_ID}}::sdk_static ALIAS {{LIBRARY_ID}}_sdk_static)
 
-install(TARGETS {{LIBRARY_ID}}_sdk
+    target_include_directories({{LIBRARY_ID}}_sdk_static
+        PUBLIC
+            $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+            $<INSTALL_INTERFACE:include>
+    )
+
+    target_link_libraries({{LIBRARY_ID}}_sdk_static PUBLIC ${_{{LIBRARY_ID}}_sdk_static_dep})
+
+    set_target_properties({{LIBRARY_ID}}_sdk_static PROPERTIES
+        OUTPUT_NAME {{LIBRARY_ID}}
+        EXPORT_NAME sdk_static
+    )
+    list(APPEND _{{LIBRARY_ID}}_install_targets {{LIBRARY_ID}}_sdk_static)
+endif()
+
+if(KTOOLS_DEMO_BUILD_SHARED)
+    add_library({{LIBRARY_ID}}_sdk_shared SHARED
+        src/main.cpp
+    )
+    add_library({{LIBRARY_ID}}::sdk_shared ALIAS {{LIBRARY_ID}}_sdk_shared)
+
+    target_include_directories({{LIBRARY_ID}}_sdk_shared
+        PUBLIC
+            $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+            $<INSTALL_INTERFACE:include>
+    )
+
+    target_link_libraries({{LIBRARY_ID}}_sdk_shared PUBLIC ${_{{LIBRARY_ID}}_sdk_shared_dep})
+
+    set_target_properties({{LIBRARY_ID}}_sdk_shared PROPERTIES
+        OUTPUT_NAME {{LIBRARY_ID}}
+        EXPORT_NAME sdk_shared
+    )
+    list(APPEND _{{LIBRARY_ID}}_install_targets {{LIBRARY_ID}}_sdk_shared)
+endif()
+
+if(TARGET {{LIBRARY_ID}}_sdk_shared)
+    add_library({{LIBRARY_ID}}::sdk ALIAS {{LIBRARY_ID}}_sdk_shared)
+elseif(TARGET {{LIBRARY_ID}}_sdk_static)
+    add_library({{LIBRARY_ID}}::sdk ALIAS {{LIBRARY_ID}}_sdk_static)
+endif()
+
+install(TARGETS ${_{{LIBRARY_ID}}_install_targets}
     EXPORT {{LIBRARY_PACKAGE_NAME}}Targets
     ARCHIVE DESTINATION lib COMPONENT {{LIBRARY_PACKAGE_NAME}}
     LIBRARY DESTINATION lib COMPONENT {{LIBRARY_PACKAGE_NAME}}

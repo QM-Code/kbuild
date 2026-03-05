@@ -22,6 +22,8 @@ def usage(exit_code: int = 1) -> None:
     print("  --list-builds       list existing build version directories", file=sys.stderr)
     print("  --remove-latest     remove every build/latest/ directory", file=sys.stderr)
     print("  --version <name>    build version slot under build/ (default: latest)", file=sys.stderr)
+    print("  --build-jobs <n>    number of parallel jobs for cmake --build", file=sys.stderr)
+    print("  --build-type <t>    build type: static|shared|both", file=sys.stderr)
     print(
         "  --build-demos [demo ...]  build demos in order; with no args uses kbuild.json build.demos",
         file=sys.stderr,
@@ -92,6 +94,8 @@ def main(
     initialize_git = False
     git_sync_requested = False
     git_sync_message = ""
+    build_jobs_override: int | None = None
+    build_type_override: str | None = None
     requested_demos: list[str] = []
 
     i = 0
@@ -125,6 +129,25 @@ def main(
                 fail("missing value for '--version'")
             version = build_ops.validate_version_slot(args[i])
             version_explicit = True
+        elif arg == "--build-jobs":
+            i += 1
+            if i >= len(args):
+                fail("missing value for '--build-jobs'")
+            try:
+                parsed_jobs = int(args[i].strip())
+            except ValueError:
+                fail("--build-jobs requires a positive integer")
+            if parsed_jobs < 1:
+                fail("--build-jobs requires a positive integer")
+            build_jobs_override = parsed_jobs
+        elif arg == "--build-type":
+            i += 1
+            if i >= len(args):
+                fail("missing value for '--build-type'")
+            parsed_build_type = args[i].strip().lower()
+            if parsed_build_type not in config_ops.VALID_BUILD_TYPES:
+                fail("--build-type must be one of: static, shared, both")
+            build_type_override = parsed_build_type
         elif arg == "--build-demos":
             build_demos = True
             i += 1
@@ -151,6 +174,10 @@ def main(
     build_mode_flags: list[str] = []
     if version_explicit:
         build_mode_flags.append("--version")
+    if build_jobs_override is not None:
+        build_mode_flags.append("--build-jobs")
+    if build_type_override is not None:
+        build_mode_flags.append("--build-type")
     if build_demos:
         build_mode_flags.append("--build-demos")
     if configure_flag_seen:
@@ -234,6 +261,7 @@ def main(
         return build_ops.list_build_dirs(repo_root)
 
     (
+        project_id,
         has_cmake,
         cmake_minimum_version,
         cmake_package_name,
@@ -241,6 +269,8 @@ def main(
         has_vcpkg,
         config_build_demos,
         config_default_build_demos,
+        config_build_jobs,
+        config_build_type,
         config_sdk_dependencies,
     ) = config_ops.load_kbuild_config(repo_root)
 
@@ -260,6 +290,10 @@ def main(
         return 0
 
     sdk_dependencies = build_ops.resolve_sdk_dependencies(repo_root, version, config_sdk_dependencies)
+    build_jobs = config_build_jobs if build_jobs_override is None else build_jobs_override
+    build_type = config_build_type if build_type_override is None else build_type_override
+    build_static = build_type in {"static", "both"}
+    build_shared = build_type in {"shared", "both"}
     configure = configure_by_default if configure_override is None else configure_override
     if rebuild:
         if configure_override is False:
@@ -300,7 +334,12 @@ def main(
     build_dir = os.path.join("build", version)
 
     source_dir = repo_root
-    cmake_args = ["-DCMAKE_BUILD_TYPE=Release"]
+    project_id_upper = project_id.upper()
+    cmake_args = [
+        "-DCMAKE_BUILD_TYPE=Release",
+        f"-D{project_id_upper}_BUILD_STATIC={'ON' if build_static else 'OFF'}",
+        f"-D{project_id_upper}_BUILD_SHARED={'ON' if build_shared else 'OFF'}",
+    ]
     if sdk_dependencies:
         prefix_entries = [dependency_prefix for _, dependency_prefix in sdk_dependencies]
         cmake_args.extend(
@@ -334,7 +373,7 @@ def main(
         os.makedirs(build_dir, exist_ok=True)
         run(["cmake", "-S", source_dir, "-B", build_dir, *cmake_args], env=env)
 
-    run(["cmake", "--build", build_dir, "-j4"], env=env)
+    run(["cmake", "--build", build_dir, f"-j{build_jobs}"], env=env)
 
     install_prefix = os.path.abspath(os.path.join(build_dir, "sdk"))
     build_ops.clean_sdk_install_prefix(install_prefix)
@@ -361,6 +400,9 @@ def main(
                 cmake_minimum_version=cmake_minimum_version,
                 cmake_package_name=cmake_package_name,
                 sdk_dependencies=sdk_dependencies,
+                build_jobs=build_jobs,
+                build_static=build_static,
+                build_shared=build_shared,
                 env=env,
                 demo_order=demo_order,
             )

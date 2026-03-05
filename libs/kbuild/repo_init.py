@@ -205,11 +205,12 @@ def initialize_repo_layout(repo_root: str, templates_root: str) -> int:
     vcpkg_dependencies = list(config["vcpkg_dependencies"])
     demo_library_ids = ["alpha", "beta", "gamma"]
 
-    option_build_shared = ""
+    option_build_variants = ""
     include_install_export = ""
     if sdk_enabled:
-        option_build_shared = (
-            f'option({project_id_upper}_BUILD_SHARED "Build {project_id} as a shared library" OFF)'
+        option_build_variants = (
+            f'option({project_id_upper}_BUILD_STATIC "Build {project_id} static library target" ON)\n'
+            f'option({project_id_upper}_BUILD_SHARED "Build {project_id} shared library target" ON)'
         )
         include_install_export = (
             'if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/cmake/50_install_export.cmake")\n'
@@ -276,7 +277,7 @@ def initialize_repo_layout(repo_root: str, templates_root: str) -> int:
         {
             "CMAKE_MINIMUM_VERSION": cmake_minimum_version,
             "PROJECT_ID": project_id,
-            "OPTION_BUILD_SHARED": option_build_shared,
+            "OPTION_BUILD_VARIANTS": option_build_variants,
             "INCLUDE_INSTALL_EXPORT": include_install_export,
         },
     )
@@ -468,6 +469,7 @@ def initialize_repo_layout(repo_root: str, templates_root: str) -> int:
                         {
                             "SDK_PACKAGE_NAME": sdk_package_name,
                             "LIBRARY_PACKAGE_NAME": library_package_name,
+                            "LIBRARY_ID": library_id,
                         },
                     ),
                     "header": render_template(
@@ -575,6 +577,7 @@ def initialize_repo_layout(repo_root: str, templates_root: str) -> int:
             "package_config.cmake.in.tpl",
             {
                 "SDK_PACKAGE_NAME": sdk_package_name,
+                "PROJECT_ID": project_id,
             },
         )
         files_to_write.extend(

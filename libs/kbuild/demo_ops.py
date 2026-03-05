@@ -19,6 +19,9 @@ def build_demo(
     cmake_minimum_version: str,
     cmake_package_name: str,
     sdk_dependencies: list[tuple[str, str]],
+    build_jobs: int,
+    build_static: bool,
+    build_shared: bool,
     env: dict[str, str],
     demo_order: list[str],
 ) -> None:
@@ -49,6 +52,8 @@ def build_demo(
     cmake_args = [
         "-DCMAKE_BUILD_TYPE=Release",
         f"-DKTOOLS_CMAKE_MINIMUM_VERSION={cmake_minimum_version}",
+        f"-DKTOOLS_DEMO_BUILD_STATIC={'ON' if build_static else 'OFF'}",
+        f"-DKTOOLS_DEMO_BUILD_SHARED={'ON' if build_shared else 'OFF'}",
         f"-DCMAKE_PREFIX_PATH={';'.join(prefix_entries)}",
         "-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON",
         f"-D{cmake_package_name}_DIR={build_ops.package_dir(core_sdk_prefix, cmake_package_name)}",
@@ -71,7 +76,7 @@ def build_demo(
         os.makedirs(build_dir, exist_ok=True)
         _run(["cmake", "-S", source_dir, "-B", build_dir, *cmake_args], env=env)
 
-    _run(["cmake", "--build", build_dir, "-j4"], env=env)
+    _run(["cmake", "--build", build_dir, f"-j{build_jobs}"], env=env)
     if build_ops.build_dir_has_install_rules(build_dir):
         build_ops.clean_sdk_install_prefix(install_prefix)
         _run(

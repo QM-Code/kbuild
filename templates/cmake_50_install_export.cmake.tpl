@@ -2,7 +2,15 @@ include(CMakePackageConfigHelpers)
 
 set(KTOOLS_INSTALL_CMAKEDIR "lib/cmake/{{SDK_PACKAGE_NAME}}")
 
-install(TARGETS {{PROJECT_ID}}_sdk
+set(_{{PROJECT_ID}}_install_targets)
+if(TARGET {{PROJECT_ID}}_sdk_static)
+    list(APPEND _{{PROJECT_ID}}_install_targets {{PROJECT_ID}}_sdk_static)
+endif()
+if(TARGET {{PROJECT_ID}}_sdk_shared)
+    list(APPEND _{{PROJECT_ID}}_install_targets {{PROJECT_ID}}_sdk_shared)
+endif()
+
+install(TARGETS ${_{{PROJECT_ID}}_install_targets}
     EXPORT {{SDK_PACKAGE_NAME}}Targets
     ARCHIVE DESTINATION lib COMPONENT {{SDK_PACKAGE_NAME}}
     LIBRARY DESTINATION lib COMPONENT {{SDK_PACKAGE_NAME}}

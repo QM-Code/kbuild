@@ -208,7 +208,6 @@ It creates directories and starter files such as:
 - `cmake/20_targets.cmake` (when `cmake` is defined in `kbuild.json`)
 - `src/<project_id>.cpp`
 - `vcpkg/vcpkg.json`
-- `vcpkg/vcpkg-configuration.json`
 - plus SDK-related files if `cmake.sdk.package_name` is defined
 
 Example:
@@ -245,10 +244,8 @@ Example:
 ### `--sync-vcpkg-baseline`
 
 Reads `./vcpkg/src` HEAD commit hash and writes it into:
-- `vcpkg/vcpkg.json` -> `builtin-baseline`
-- `vcpkg/vcpkg-configuration.json` -> `default-registry.baseline`
+- `vcpkg/vcpkg.json` -> `configuration.default-registry.baseline`
 
-Also ensures `default-registry.kind` exists (defaults to `builtin` if missing).
 
 Example:
 
@@ -551,8 +548,7 @@ Baseline sync source of truth:
 - commit hash from `git -C ./vcpkg/src rev-parse HEAD`
 
 Files updated:
-- `vcpkg/vcpkg.json` -> `builtin-baseline`
-- `vcpkg/vcpkg-configuration.json` -> `default-registry.baseline`
+- `vcpkg/vcpkg.json` -> `configuration.default-registry.baseline`
 
 ## 10) Repo Initialization Details
 
@@ -566,7 +562,7 @@ Generated structure always includes:
 - root `CMakeLists.txt`, `README.md`, `.gitignore`
 - `agent/BOOTSTRAP.md`
 - `src/<project_id>.cpp`
-- `vcpkg/vcpkg.json`, `vcpkg/vcpkg-configuration.json`
+- `vcpkg/vcpkg.json`
 
 If `cmake` is defined in `kbuild.json`, it also generates:
 - `cmake/tests/CMakeLists.txt`

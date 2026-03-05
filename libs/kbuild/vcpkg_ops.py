@@ -226,48 +226,26 @@ def sync_vcpkg_baseline(repo_root: str) -> str:
     baseline = read_git_head_commit(local_vcpkg_root)
 
     manifest_path = os.path.join(repo_root, "vcpkg", "vcpkg.json")
-    configuration_path = os.path.join(repo_root, "vcpkg", "vcpkg-configuration.json")
 
     manifest = _load_json_object(manifest_path)
-    configuration = _load_json_object(configuration_path)
 
-    old_manifest_baseline = manifest.get("builtin-baseline")
-    manifest["builtin-baseline"] = baseline
+    configuration = manifest.get("configuration")
+    if not isinstance(configuration, dict):
+        errors.die("vcpkg.json key 'configuration' must be an object")
 
     registry = configuration.get("default-registry")
-    if registry is None:
-        registry_obj: dict[str, object] = {}
-        configuration["default-registry"] = registry_obj
-    elif isinstance(registry, dict):
-        registry_obj = registry
-    else:
-        errors.die("vcpkg-configuration.json key 'default-registry' must be an object")
-    if "kind" not in registry_obj:
-        registry_obj["kind"] = "builtin"
-    old_config_baseline = registry_obj.get("baseline")
-    registry_obj["baseline"] = baseline
+    if not isinstance(registry, dict):
+        errors.die("vcpkg.json key 'configuration.default-registry' must be an object")
+    old_baseline = registry.get("baseline")
+    registry["baseline"] = baseline
 
     _write_json_object(manifest_path, manifest)
-    _write_json_object(configuration_path, configuration)
 
-    old_manifest_text = (
-        old_manifest_baseline.strip()
-        if isinstance(old_manifest_baseline, str) and old_manifest_baseline.strip()
-        else "<unset>"
-    )
-    old_config_text = (
-        old_config_baseline.strip()
-        if isinstance(old_config_baseline, str) and old_config_baseline.strip()
-        else "<unset>"
-    )
+    old_text = old_baseline.strip() if isinstance(old_baseline, str) and old_baseline.strip() else "<unset>"
     print(f"vcpkg baseline synced -> {baseline}", flush=True)
     print(
-        f"  ./vcpkg/vcpkg.json: builtin-baseline {old_manifest_text} -> {baseline}",
-        flush=True,
-    )
-    print(
-        "  ./vcpkg/vcpkg-configuration.json: "
-        f"default-registry.baseline {old_config_text} -> {baseline}",
+        "  ./vcpkg/vcpkg.json: "
+        f"configuration.default-registry.baseline {old_text} -> {baseline}",
         flush=True,
     )
     return baseline

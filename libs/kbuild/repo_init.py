@@ -513,14 +513,12 @@ def initialize_repo_layout(repo_root: str, templates_root: str) -> int:
         vcpkg_json_payload = {
             "dependencies": vcpkg_dependencies,
         }
-    vcpkg_json_content = f"{json.dumps(vcpkg_json_payload, indent=2)}\\n"
-
-    vcpkg_configuration_payload = {
+    vcpkg_json_payload["configuration"] = {
         "default-registry": {
             "kind": "builtin",
         }
     }
-    vcpkg_configuration_content = f"{json.dumps(vcpkg_configuration_payload, indent=2)}\\n"
+    vcpkg_json_content = f"{json.dumps(vcpkg_json_payload, indent=2)}\\n"
     gitignore_content = render_template(templates_root, "gitignore.tpl", {})
 
     files_to_write: list[tuple[str, str]] = [
@@ -530,10 +528,6 @@ def initialize_repo_layout(repo_root: str, templates_root: str) -> int:
         (os.path.join(repo_root, "agent", "BOOTSTRAP.md"), bootstrap_content),
         (os.path.join(repo_root, "src", f"{project_id}.cpp"), src_cpp_content),
         (os.path.join(repo_root, "vcpkg", "vcpkg.json"), vcpkg_json_content),
-        (
-            os.path.join(repo_root, "vcpkg", "vcpkg-configuration.json"),
-            vcpkg_configuration_content,
-        ),
     ]
     if cmake_enabled:
         files_to_write.extend(

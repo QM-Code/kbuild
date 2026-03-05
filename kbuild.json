@@ -1,0 +1,14 @@
+{
+  "kbuild": {
+    "rootdir": ".",
+    "api": "1"
+  },
+  "project": {
+    "title": "Karma Build Tools",
+    "id": "kbuild"
+  },
+  "git": {
+    "url": "https://github.com/QM-Code/kbuild",
+    "auth": "git@github.com:QM-Code/kbuild.git"
+  }
+}

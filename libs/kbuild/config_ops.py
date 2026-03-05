@@ -7,7 +7,7 @@ from . import errors
 
 def load_kbuild_config(
     repo_root: str,
-) -> tuple[bool, str, bool, bool, list[str], list[str], list[tuple[str, str]]]:
+) -> tuple[bool, str, str, bool, bool, list[str], list[str], list[tuple[str, str]]]:
     config_path = os.path.join(repo_root, "kbuild.json")
     if not os.path.isfile(config_path):
         errors.die(
@@ -59,6 +59,7 @@ def load_kbuild_config(
         errors.die("kbuild.json key 'git.auth' must be a non-empty string")
 
     has_cmake = False
+    cmake_minimum_version = "3.20"
     cmake_package_name = ""
     configure_by_default = True
     sdk_dependencies: list[tuple[str, str]] = []
@@ -77,6 +78,7 @@ def load_kbuild_config(
             cmake_minimum_version_raw = cmake_raw.get("minimum_version")
             if not isinstance(cmake_minimum_version_raw, str) or not cmake_minimum_version_raw.strip():
                 errors.die("kbuild.json key 'cmake.minimum_version' must be a non-empty string")
+            cmake_minimum_version = cmake_minimum_version_raw.strip()
 
         configure_by_default_raw = cmake_raw.get("configure_by_default", True)
         if not isinstance(configure_by_default_raw, bool):
@@ -179,6 +181,7 @@ def load_kbuild_config(
 
     return (
         has_cmake,
+        cmake_minimum_version,
         cmake_package_name,
         configure_by_default,
         has_vcpkg,

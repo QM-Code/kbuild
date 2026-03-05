@@ -1,0 +1,78 @@
+if(NOT DEFINED KTOOLS_CMAKE_MINIMUM_VERSION OR KTOOLS_CMAKE_MINIMUM_VERSION STREQUAL "")
+    set(KTOOLS_CMAKE_MINIMUM_VERSION "{{CMAKE_MINIMUM_VERSION}}")
+endif()
+cmake_minimum_required(VERSION ${KTOOLS_CMAKE_MINIMUM_VERSION})
+
+project({{LIBRARY_ID}} VERSION 0.1.0 LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+if(NOT TARGET {{PROJECT_ID}}::sdk)
+    find_package({{SDK_PACKAGE_NAME}} CONFIG REQUIRED)
+endif()
+include(CMakePackageConfigHelpers)
+
+add_library({{LIBRARY_ID}}_sdk STATIC
+    src/main.cpp
+)
+add_library({{LIBRARY_ID}}::sdk ALIAS {{LIBRARY_ID}}_sdk)
+
+target_include_directories({{LIBRARY_ID}}_sdk
+    PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<INSTALL_INTERFACE:include>
+)
+
+target_link_libraries({{LIBRARY_ID}}_sdk PUBLIC {{PROJECT_ID}}::sdk)
+
+set_target_properties({{LIBRARY_ID}}_sdk PROPERTIES
+    OUTPUT_NAME {{LIBRARY_ID}}
+    EXPORT_NAME sdk
+)
+
+install(TARGETS {{LIBRARY_ID}}_sdk
+    EXPORT {{LIBRARY_PACKAGE_NAME}}Targets
+    ARCHIVE DESTINATION lib COMPONENT {{LIBRARY_PACKAGE_NAME}}
+    LIBRARY DESTINATION lib COMPONENT {{LIBRARY_PACKAGE_NAME}}
+    RUNTIME DESTINATION bin COMPONENT {{LIBRARY_PACKAGE_NAME}}
+    INCLUDES DESTINATION include
+)
+
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/
+    DESTINATION include
+    COMPONENT {{LIBRARY_PACKAGE_NAME}}
+    FILES_MATCHING PATTERN "*.hpp"
+)
+
+install(EXPORT {{LIBRARY_PACKAGE_NAME}}Targets
+    FILE {{LIBRARY_PACKAGE_NAME}}Targets.cmake
+    NAMESPACE {{LIBRARY_ID}}::
+    DESTINATION lib/cmake/{{LIBRARY_PACKAGE_NAME}}
+    COMPONENT {{LIBRARY_PACKAGE_NAME}}
+)
+
+configure_package_config_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/cmake/{{LIBRARY_PACKAGE_NAME}}Config.cmake.in
+    ${CMAKE_CURRENT_BINARY_DIR}/{{LIBRARY_PACKAGE_NAME}}Config.cmake
+    INSTALL_DESTINATION lib/cmake/{{LIBRARY_PACKAGE_NAME}}
+)
+
+write_basic_package_version_file(
+    ${CMAKE_CURRENT_BINARY_DIR}/{{LIBRARY_PACKAGE_NAME}}ConfigVersion.cmake
+    VERSION ${PROJECT_VERSION}
+    COMPATIBILITY SameMajorVersion
+)
+
+install(FILES
+    ${CMAKE_CURRENT_BINARY_DIR}/{{LIBRARY_PACKAGE_NAME}}Config.cmake
+    ${CMAKE_CURRENT_BINARY_DIR}/{{LIBRARY_PACKAGE_NAME}}ConfigVersion.cmake
+    DESTINATION lib/cmake/{{LIBRARY_PACKAGE_NAME}}
+    COMPONENT {{LIBRARY_PACKAGE_NAME}}
+)
+
+include(CTest)
+if(BUILD_TESTING AND EXISTS "${CMAKE_CURRENT_LIST_DIR}/cmake/tests/CMakeLists.txt")
+    add_subdirectory(cmake/tests)
+endif()

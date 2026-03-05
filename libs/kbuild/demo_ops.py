@@ -16,6 +16,7 @@ def build_demo(
     demo_name: str,
     version: str,
     configure: bool,
+    cmake_minimum_version: str,
     cmake_package_name: str,
     sdk_dependencies: list[tuple[str, str]],
     env: dict[str, str],
@@ -47,6 +48,7 @@ def build_demo(
 
     cmake_args = [
         "-DCMAKE_BUILD_TYPE=Release",
+        f"-DKTOOLS_CMAKE_MINIMUM_VERSION={cmake_minimum_version}",
         f"-DCMAKE_PREFIX_PATH={';'.join(prefix_entries)}",
         "-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON",
         f"-D{cmake_package_name}_DIR={build_ops.package_dir(core_sdk_prefix, cmake_package_name)}",

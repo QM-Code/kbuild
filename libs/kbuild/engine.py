@@ -235,6 +235,7 @@ def main(
 
     (
         has_cmake,
+        cmake_minimum_version,
         cmake_package_name,
         configure_by_default,
         has_vcpkg,
@@ -357,6 +358,7 @@ def main(
                 demo_name=demo_name,
                 version=version,
                 configure=configure,
+                cmake_minimum_version=cmake_minimum_version,
                 cmake_package_name=cmake_package_name,
                 sdk_dependencies=sdk_dependencies,
                 env=env,

@@ -198,6 +198,10 @@ It creates directories and starter files such as:
 - `README.md`
 - `.gitignore`
 - `agent/BOOTSTRAP.md`
+- `demo/bootstrap/{CMakeLists.txt,README.md,src/main.cpp}` (SDK projects)
+- `demo/libraries/{alpha,beta,gamma}/...` (SDK projects)
+- `demo/executable/{CMakeLists.txt,README.md,src/main.cpp}` (SDK projects)
+- `demo/*/cmake/tests/CMakeLists.txt` placeholders (SDK projects)
 - `cmake/tests/CMakeLists.txt` (when `cmake` is defined in `kbuild.json`)
 - `cmake/00_toolchain.cmake` (when `cmake` is defined in `kbuild.json`)
 - `cmake/10_dependencies.cmake` (when `cmake` is defined in `kbuild.json`)

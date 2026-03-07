@@ -10,41 +10,6 @@ WRAPPER_API = "1"
 LOCAL_CONFIG_FILENAME = ".kbuild.json"
 
 
-def print_usage(exit_code: int = 0) -> None:
-    print("Usage: kbuild.py <options>", file=sys.stderr)
-    print("", file=sys.stderr)
-    print("Initialization options:", file=sys.stderr)
-    print("  --kbuild-root <dir>     validate a shared kbuild checkout and update ./.kbuild.json", file=sys.stderr)
-    print("  --kbuild-config         create a starter kbuild.json template", file=sys.stderr)
-    print("  --kbuild-init           scaffold this repo from ./kbuild.json", file=sys.stderr)
-    print("", file=sys.stderr)
-    print("Build options:", file=sys.stderr)
-    print("  --build [version]       build a version slot under build/; with no version prints this section", file=sys.stderr)
-    print("  --build-latest          build the latest slot", file=sys.stderr)
-    print("  --build-demos [demo ...]  build demos in order; with no args uses kbuild.json build.demos", file=sys.stderr)
-    print("  --build-type <t>        build type: static|shared|both", file=sys.stderr)
-    print("  --build-jobs <n>        number of parallel jobs for cmake --build", file=sys.stderr)
-    print("  --build-list            list existing build version directories", file=sys.stderr)
-    print("", file=sys.stderr)
-    print("CMake options:", file=sys.stderr)
-    print("  --cmake-configure       force cmake configure step", file=sys.stderr)
-    print("  --cmake-no-configure    skip cmake configure step", file=sys.stderr)
-    print("", file=sys.stderr)
-    print("Git options:", file=sys.stderr)
-    print("  --git-initialize        verify remote, initialize local git repo, commit, and push main", file=sys.stderr)
-    print("  --git-sync <msg>        git add . && git commit -m <msg> && git push", file=sys.stderr)
-    print("", file=sys.stderr)
-    print("VCpkg options:", file=sys.stderr)
-    print("  --vcpkg-install         clone/bootstrap local vcpkg under ./vcpkg, sync baseline, then build", file=sys.stderr)
-    print("  --vcpkg-sync-baseline   set baseline fields from ./vcpkg/src HEAD", file=sys.stderr)
-    print("", file=sys.stderr)
-    print("Clean options:", file=sys.stderr)
-    print("  --clean [version]       remove a specific build version; with no version prints this section", file=sys.stderr)
-    print("  --clean-latest          remove every build/latest/ directory", file=sys.stderr)
-    print("  --clean-all             remove every build version directory", file=sys.stderr)
-    raise SystemExit(exit_code)
-
-
 def fail(message: str, *, exit_code: int = 2) -> None:
     print(f"Error: {message}", file=sys.stderr)
     raise SystemExit(exit_code)
@@ -193,11 +158,6 @@ def load_core_runner(root_abs: str) -> Callable[..., int]:
 def main() -> int:
     repo_root = enforce_script_directory()
     raw_args = sys.argv[1:]
-
-    if not raw_args:
-        print_usage(0)
-    if len(raw_args) == 1 and raw_args[0] in ("-h", "--help"):
-        print_usage(0)
 
     root_override, passthrough_args = parse_bootstrap_root_arg(raw_args)
 

@@ -243,3 +243,15 @@ def resolve_sdk_dependencies(
         resolved.append((package_name, candidate_prefix))
 
     return resolved
+
+
+def runtime_library_dirs(prefixes: list[str]) -> list[str]:
+    dirs: list[str] = []
+    for prefix in prefixes:
+        lib_dir = os.path.join(prefix, "lib")
+        if not os.path.isdir(lib_dir):
+            continue
+        if lib_dir in dirs:
+            continue
+        dirs.append(lib_dir)
+    return dirs

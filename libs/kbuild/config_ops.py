@@ -5,6 +5,8 @@ import sys
 
 from . import errors
 
+PRIMARY_KBUILD_CONFIG_FILENAME = "kbuild.json"
+LOCAL_KBUILD_CONFIG_FILENAME = ".kbuild.json"
 VALID_BUILD_TYPES = {"static", "shared", "both"}
 
 
@@ -31,6 +33,75 @@ def parse_build_type(*, value: object, key_path: str) -> str:
     return build_type
 
 
+def _load_json_object(path: str, *, required: bool) -> dict[str, object] | None:
+    if not os.path.isfile(path):
+        if required:
+            errors.die(f"missing required JSON file: {path}")
+        return None
+
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            payload = json.load(handle)
+    except (OSError, json.JSONDecodeError) as exc:
+        errors.die(f"could not parse {path}: {exc}")
+
+    if not isinstance(payload, dict):
+        errors.die(f"{path} must be a JSON object")
+    return payload
+
+
+def _deep_merge(base: object, overlay: object) -> object:
+    if isinstance(base, dict) and isinstance(overlay, dict):
+        merged = dict(base)
+        for key, overlay_value in overlay.items():
+            if key in merged:
+                merged[key] = _deep_merge(merged[key], overlay_value)
+            else:
+                merged[key] = overlay_value
+        return merged
+    return overlay
+
+
+def load_effective_kbuild_payload(
+    repo_root: str,
+    *,
+    require_local: bool,
+    require_shared: bool,
+) -> dict[str, object]:
+    shared_path = os.path.join(repo_root, PRIMARY_KBUILD_CONFIG_FILENAME)
+    shared_payload: dict[str, object] = {}
+    if os.path.isfile(shared_path):
+        loaded_shared = _load_json_object(shared_path, required=True)
+        if loaded_shared is None:  # pragma: no cover
+            errors.die(f"missing required config file './{PRIMARY_KBUILD_CONFIG_FILENAME}'")
+        shared_payload = loaded_shared
+    elif require_shared:
+        errors.die(f"missing required config file './{PRIMARY_KBUILD_CONFIG_FILENAME}'")
+
+    if "kbuild" in shared_payload:
+        errors.die(
+            "kbuild.json must not define key 'kbuild'. "
+            "Move local bootstrap settings to './.kbuild.json'."
+        )
+
+    local_path = os.path.join(repo_root, LOCAL_KBUILD_CONFIG_FILENAME)
+    if not os.path.isfile(local_path):
+        if require_local:
+            errors.die(
+                "missing required local config file './.kbuild.json'.\n"
+                "Run './kbuild.py --kbuild-root <path>' first."
+            )
+        return shared_payload
+    local_payload = _load_json_object(local_path, required=False)
+    if local_payload is None:  # pragma: no cover
+        return shared_payload
+
+    merged = _deep_merge(shared_payload, local_payload)
+    if not isinstance(merged, dict):  # pragma: no cover
+        errors.die("internal error while merging kbuild config payloads")
+    return merged
+
+
 def load_kbuild_config(
     repo_root: str,
 ) -> tuple[
@@ -46,27 +117,7 @@ def load_kbuild_config(
     str,
     list[tuple[str, str]],
 ]:
-    config_path = os.path.join(repo_root, "kbuild.json")
-    if not os.path.isfile(config_path):
-        errors.die(
-            "missing required config file './kbuild.json'.\n"
-            "Expected keys:\n"
-            "  project (object, required)\n"
-            "  git (object, required)\n"
-            "Optional keys:\n"
-            "  cmake (object)\n"
-            "  vcpkg (object)\n"
-            "  build (object)"
-        )
-
-    try:
-        with open(config_path, "r", encoding="utf-8") as handle:
-            raw = json.load(handle)
-    except (OSError, json.JSONDecodeError) as exc:
-        errors.die(f"could not parse {config_path}: {exc}")
-
-    if not isinstance(raw, dict):
-        errors.die("kbuild.json must be a JSON object")
+    raw = load_effective_kbuild_payload(repo_root, require_local=True, require_shared=False)
 
     allowed_top = {"project", "git", "cmake", "vcpkg", "build", "kbuild"}
     for key in raw:
@@ -250,16 +301,12 @@ def _write_json_object(path: str, payload: dict[str, object]) -> None:
 
 
 def create_kbuild_config_template(repo_root: str, kbuild_root_value: str) -> int:
-    config_path = os.path.join(repo_root, "kbuild.json")
+    config_path = os.path.join(repo_root, PRIMARY_KBUILD_CONFIG_FILENAME)
     if os.path.exists(config_path):
         errors.emit_error("'./kbuild.json' already exists.")
         return 2
 
     payload = {
-        "kbuild": {
-            "rootdir": kbuild_root_value,
-            "api": "1",
-        },
         "project": {
             "title": "My Project Title",
             "id": "myproject",
@@ -290,6 +337,6 @@ def create_kbuild_config_template(repo_root: str, kbuild_root_value: str) -> int
     }
     _write_json_object(config_path, payload)
     print("Created ./kbuild.json template.", flush=True)
-    print(f"Prepopulated kbuild.rootdir = '{kbuild_root_value}'.", flush=True)
-    print("Set kbuild.rootdir to a valid shared kbuild root directory before running build operations.", flush=True)
+    print("Ensure ./.kbuild.json exists (run './kbuild.py --kbuild-root <path>') before build operations.", flush=True)
+    print(f"Suggested .kbuild.json kbuild.rootdir value: '{kbuild_root_value}'", flush=True)
     return 0

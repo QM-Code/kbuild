@@ -32,8 +32,8 @@ def usage(exit_code: int = 1) -> None:
     print("  --configure         force cmake configure step", file=sys.stderr)
     print("  --no-configure      skip cmake configure step", file=sys.stderr)
     print("  --create-config     create a starter kbuild.json template", file=sys.stderr)
-    print("                     (requires wrapper bootstrap option: --kbuild-root <path>)", file=sys.stderr)
-    print("  --initialize-repo   scaffold this repo from kbuild.json metadata", file=sys.stderr)
+    print("                     (kbuild.json is optional; this is a convenience scaffold)", file=sys.stderr)
+    print("  --initialize-repo   scaffold this repo using merged config (.kbuild.json required)", file=sys.stderr)
     print(
         "  --initialize-git    verify remote, initialize local git repo, commit, and push main",
         file=sys.stderr,
@@ -234,22 +234,11 @@ def main(
     ):
         fail("--sync-vcpkg-baseline cannot be combined with other options")
 
-    if create_config and bootstrap_root_override is None:
-        fail("--create-config requires wrapper bootstrap option --kbuild-root <path>")
-
-    config_path = os.path.join(repo_root, "kbuild.json")
-    if not os.path.isfile(config_path):
-        if create_config:
-            return config_ops.create_kbuild_config_template(repo_root, bootstrap_root_override)
-        errors.die(
-            "'kbuild.json' does not exist.\n"
-            "Run `./kbuild.py --kbuild-root <path> --create-config` to create a template."
-        )
-    if create_config:
-        errors.die("'./kbuild.json' already exists.")
-
     if initialize_repo:
         return repo_init.initialize_repo_layout(repo_root, templates_root)
+    if create_config:
+        root_hint = bootstrap_root_override if bootstrap_root_override is not None else "."
+        return config_ops.create_kbuild_config_template(repo_root, root_hint)
     if initialize_git:
         git_url, git_auth = git_ops.load_git_urls(repo_root)
         return git_ops.initialize_git_repo(repo_root, git_url, git_auth)
@@ -306,7 +295,7 @@ def main(
             demo_order = [build_ops.normalize_demo_name(token) for token in requested_demos]
         else:
             if not config_build_demos:
-                fail("kbuild.json must define 'build.demos' for --build-demos with no demo arguments")
+                fail("config must define 'build.demos' for --build-demos with no demo arguments")
             demo_order = [build_ops.normalize_demo_name(token) for token in config_build_demos]
     elif config_default_build_demos:
         demo_order = [build_ops.normalize_demo_name(token) for token in config_default_build_demos]
@@ -314,7 +303,7 @@ def main(
     if demo_order:
         if not cmake_package_name:
             fail(
-                "demo builds require SDK metadata; define cmake.sdk.package_name in kbuild.json"
+                "demo builds require SDK metadata; define cmake.sdk.package_name in config"
             )
         for demo_name in demo_order:
             build_ops.resolve_demo_source_dir(repo_root, demo_name)
@@ -350,6 +339,9 @@ def main(
         )
         for package_name, dependency_prefix in sdk_dependencies:
             cmake_args.append(f"-D{package_name}_DIR={build_ops.package_dir(dependency_prefix, package_name)}")
+    runtime_rpath_dirs = build_ops.runtime_library_dirs([dependency_prefix for _, dependency_prefix in sdk_dependencies])
+    if runtime_rpath_dirs:
+        cmake_args.append(f"-DKTOOLS_RUNTIME_RPATH_DIRS={';'.join(runtime_rpath_dirs)}")
 
     build_ops.validate_core_build_dir_layout(build_dir)
 

@@ -1,8 +1,4 @@
 {
-  "kbuild": {
-    "rootdir": ".",
-    "api": "1"
-  },
   "project": {
     "title": "Karma Build Tools",
     "id": "kbuild"

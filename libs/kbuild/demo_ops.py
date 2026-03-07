@@ -48,6 +48,7 @@ def build_demo(
         dependency_sdk = os.path.join(repo_root, "demo", dependency_demo, "build", version, "sdk")
         if os.path.isdir(dependency_sdk) and dependency_sdk not in prefix_entries:
             prefix_entries.append(dependency_sdk)
+    runtime_rpath_dirs = build_ops.runtime_library_dirs(prefix_entries)
 
     cmake_args = [
         "-DCMAKE_BUILD_TYPE=Release",
@@ -58,6 +59,8 @@ def build_demo(
         "-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON",
         f"-D{cmake_package_name}_DIR={build_ops.package_dir(core_sdk_prefix, cmake_package_name)}",
     ]
+    if runtime_rpath_dirs:
+        cmake_args.append(f"-DKTOOLS_RUNTIME_RPATH_DIRS={';'.join(runtime_rpath_dirs)}")
     for package_name, dependency_prefix in sdk_dependencies:
         cmake_args.append(f"-D{package_name}_DIR={build_ops.package_dir(dependency_prefix, package_name)}")
     print(

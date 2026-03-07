@@ -2,61 +2,69 @@ import json
 import os
 import re
 
+from . import config_ops
 from . import errors
 
 
-def _load_json_object(path: str) -> dict[str, object]:
-    if not os.path.isfile(path):
-        errors.die(f"missing required JSON file: {path}")
-    try:
-        with open(path, "r", encoding="utf-8") as handle:
-            payload = json.load(handle)
-    except (OSError, json.JSONDecodeError) as exc:
-        errors.die(f"could not parse {path}: {exc}")
-    if not isinstance(payload, dict):
-        errors.die(f"expected JSON object in {path}")
-    return payload
+def _default_project_title(repo_root: str) -> str:
+    dirname = os.path.basename(os.path.abspath(repo_root)).strip()
+    if dirname:
+        return dirname
+    return "My Project Title"
+
+
+def _default_project_id(repo_root: str) -> str:
+    dirname = os.path.basename(os.path.abspath(repo_root)).strip().lower()
+    token = re.sub(r"[^a-z0-9_]+", "_", dirname)
+    token = re.sub(r"_+", "_", token).strip("_")
+    if not token:
+        token = "myproject"
+    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", token):
+        token = f"_{token}"
+    return token
 
 
 def load_initialize_repo_config(repo_root: str) -> dict[str, object]:
-    config_path = os.path.join(repo_root, "kbuild.json")
-    if not os.path.isfile(config_path):
-        errors.die("missing required config file './kbuild.json'")
+    raw = config_ops.load_effective_kbuild_payload(
+        repo_root,
+        require_local=True,
+        require_shared=False,
+    )
 
-    try:
-        with open(config_path, "r", encoding="utf-8") as handle:
-            raw = json.load(handle)
-    except (OSError, json.JSONDecodeError) as exc:
-        errors.die(f"could not parse {config_path}: {exc}")
+    allowed_top = {"project", "git", "cmake", "vcpkg", "build", "kbuild"}
+    for key in raw:
+        if key not in allowed_top:
+            errors.die(f"unexpected key in config payload: '{key}'")
 
-    if not isinstance(raw, dict):
-        errors.die("kbuild.json must be a JSON object")
-
-    project_raw = raw.get("project")
+    project_raw = raw.get("project", {})
+    if project_raw is None:
+        project_raw = {}
     if not isinstance(project_raw, dict):
-        errors.die("kbuild.json key 'project' must be an object")
+        errors.die("config key 'project' must be an object when defined")
 
-    project_title_raw = project_raw.get("title")
+    project_title_raw = project_raw.get("title", _default_project_title(repo_root))
     if not isinstance(project_title_raw, str) or not project_title_raw.strip():
-        errors.die("kbuild.json key 'project.title' must be a non-empty string")
+        errors.die("config key 'project.title' must be a non-empty string when defined")
     project_title = project_title_raw.strip()
 
-    project_id_raw = project_raw.get("id")
+    project_id_raw = project_raw.get("id", _default_project_id(repo_root))
     if not isinstance(project_id_raw, str) or not project_id_raw.strip():
-        errors.die("kbuild.json key 'project.id' must be a non-empty string")
+        errors.die("config key 'project.id' must be a non-empty string when defined")
     project_id = project_id_raw.strip()
     if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", project_id):
-        errors.die("kbuild.json key 'project.id' must be a valid C/C++ identifier")
+        errors.die("config key 'project.id' must be a valid C/C++ identifier")
 
-    git_raw = raw.get("git")
+    git_raw = raw.get("git", {})
+    if git_raw is None:
+        git_raw = {}
     if not isinstance(git_raw, dict):
-        errors.die("kbuild.json key 'git' must be an object")
-    git_url_raw = git_raw.get("url")
+        errors.die("config key 'git' must be an object when defined")
+    git_url_raw = git_raw.get("url", "https://github.com/your-org/your-repo")
     if not isinstance(git_url_raw, str) or not git_url_raw.strip():
-        errors.die("kbuild.json key 'git.url' must be a non-empty string")
-    git_auth_raw = git_raw.get("auth")
+        errors.die("config key 'git.url' must be a non-empty string when defined")
+    git_auth_raw = git_raw.get("auth", "git@github.com:your-org/your-repo.git")
     if not isinstance(git_auth_raw, str) or not git_auth_raw.strip():
-        errors.die("kbuild.json key 'git.auth' must be a non-empty string")
+        errors.die("config key 'git.auth' must be a non-empty string when defined")
     git_url = git_url_raw.strip()
     git_auth = git_auth_raw.strip()
 
@@ -68,46 +76,46 @@ def load_initialize_repo_config(repo_root: str) -> dict[str, object]:
     sdk_package_name = ""
     if cmake_raw is not None:
         if not isinstance(cmake_raw, dict):
-            errors.die("kbuild.json key 'cmake' must be an object")
+            errors.die("config key 'cmake' must be an object when defined")
 
         cmake_minimum_version_raw = cmake_raw.get("minimum_version", "3.20")
         if not isinstance(cmake_minimum_version_raw, str) or not cmake_minimum_version_raw.strip():
-            errors.die("kbuild.json key 'cmake.minimum_version' must be a non-empty string")
+            errors.die("config key 'cmake.minimum_version' must be a non-empty string when defined")
         cmake_minimum_version = cmake_minimum_version_raw.strip()
 
         if "sdk" in cmake_raw:
             sdk_raw = cmake_raw.get("sdk")
             if not isinstance(sdk_raw, dict):
-                errors.die("kbuild.json key 'cmake.sdk' must be an object when defined")
+                errors.die("config key 'cmake.sdk' must be an object when defined")
             sdk_package_name_raw = sdk_raw.get("package_name")
             if not isinstance(sdk_package_name_raw, str) or not sdk_package_name_raw.strip():
-                errors.die("kbuild.json key 'cmake.sdk.package_name' must be a non-empty string")
+                errors.die("config key 'cmake.sdk.package_name' must be a non-empty string")
             sdk_enabled = True
             sdk_package_name = sdk_package_name_raw.strip()
 
         dependencies_raw = cmake_raw.get("dependencies", {})
         if not isinstance(dependencies_raw, dict):
-            errors.die("kbuild.json key 'cmake.dependencies' must be an object when defined")
+            errors.die("config key 'cmake.dependencies' must be an object when defined")
         for dependency_name_raw, dependency_value_raw in dependencies_raw.items():
             if not isinstance(dependency_name_raw, str) or not dependency_name_raw.strip():
-                errors.die("kbuild.json key 'cmake.dependencies' has an invalid package name")
+                errors.die("config key 'cmake.dependencies' has an invalid package name")
             dependency_name = dependency_name_raw.strip()
             if not isinstance(dependency_value_raw, dict):
-                errors.die(f"kbuild.json key 'cmake.dependencies.{dependency_name}' must be an object")
+                errors.die(f"config key 'cmake.dependencies.{dependency_name}' must be an object")
             cmake_dependency_packages.append(dependency_name)
 
     vcpkg_raw = raw.get("vcpkg")
     vcpkg_dependencies: list[str] = []
     if vcpkg_raw is not None:
         if not isinstance(vcpkg_raw, dict):
-            errors.die("kbuild.json key 'vcpkg' must be an object")
+            errors.die("config key 'vcpkg' must be an object when defined")
 
         dependencies_raw = vcpkg_raw.get("dependencies", [])
         if not isinstance(dependencies_raw, list):
-            errors.die("kbuild.json key 'vcpkg.dependencies' must be an array")
+            errors.die("config key 'vcpkg.dependencies' must be an array")
         for idx, dep in enumerate(dependencies_raw):
             if not isinstance(dep, str) or not dep.strip():
-                errors.die(f"kbuild.json key 'vcpkg.dependencies[{idx}]' must be a non-empty string")
+                errors.die(f"config key 'vcpkg.dependencies[{idx}]' must be a non-empty string")
             vcpkg_dependencies.append(dep.strip())
 
     return {
@@ -139,7 +147,7 @@ def ensure_directory_for_init(path: str) -> bool:
 
 
 def ensure_initialize_repo_root_empty(repo_root: str) -> None:
-    allowed_entries = {"kbuild.py", "kbuild.json"}
+    allowed_entries = {"kbuild.py", ".kbuild.json"}
     unexpected_entries = sorted(entry for entry in os.listdir(repo_root) if entry not in allowed_entries)
     if not unexpected_entries:
         return
@@ -147,7 +155,7 @@ def ensure_initialize_repo_root_empty(repo_root: str) -> None:
     details = "\n".join(f"  {entry}" for entry in unexpected_entries)
     errors.die(
         "--initialize-repo must be run from an empty directory "
-        "(other than kbuild.json and kbuild.py).\n"
+        "(other than kbuild.py and .kbuild.json).\n"
         "Found:\n"
         f"{details}"
     )
@@ -185,11 +193,14 @@ def render_template(templates_root: str, template_name: str, values: dict[str, s
 
 def build_cmake_dependency_finds(packages: list[str]) -> str:
     if not packages:
-        return "# No explicit dependencies defined in kbuild.json cmake.dependencies."
+        return "# No explicit dependencies defined in config cmake.dependencies."
     return "\n".join(f"find_package({package_name} CONFIG REQUIRED)" for package_name in packages)
 
 
-def initialize_repo_layout(repo_root: str, templates_root: str) -> int:
+def initialize_repo_layout(
+    repo_root: str,
+    templates_root: str,
+) -> int:
     config = load_initialize_repo_config(repo_root)
     ensure_initialize_repo_root_empty(repo_root)
 

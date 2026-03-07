@@ -220,7 +220,7 @@ def sync_vcpkg_baseline(repo_root: str) -> str:
         errors.die(
             "missing vcpkg checkout under ./vcpkg/src.\n"
             "Run:\n"
-            "  ./kbuild.py --install-vcpkg"
+            "  ./kbuild.py --vcpkg-install"
         )
 
     baseline = read_git_head_commit(local_vcpkg_root)
@@ -267,7 +267,7 @@ def ensure_local_vcpkg(repo_root: str) -> tuple[str, str, str, str]:
         and is_local_vcpkg_bootstrapped(local_vcpkg_root)
     )
     if not ready:
-        errors.die("vcpkg has not been set up. Run `./kbuild.py --install-vcpkg`")
+        errors.die("vcpkg has not been set up. Run `./kbuild.py --vcpkg-install`")
 
     os.makedirs(local_vcpkg_downloads, exist_ok=True)
     os.makedirs(local_vcpkg_binary_cache, exist_ok=True)

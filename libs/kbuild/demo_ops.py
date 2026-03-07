@@ -72,7 +72,7 @@ def build_demo(
         cache_path = os.path.join(build_dir, "CMakeCache.txt")
         if not os.path.isfile(cache_path):
             errors.die(
-                f"--no-configure requires an existing CMakeCache.txt in the build directory ({build_dir})",
+                f"--cmake-no-configure requires an existing CMakeCache.txt in the build directory ({build_dir})",
                 code=1,
             )
     else:

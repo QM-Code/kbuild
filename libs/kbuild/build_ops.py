@@ -94,6 +94,30 @@ def remove_latest_build_dirs(repo_root: str) -> int:
     return 0
 
 
+def remove_build_dirs_for_slot(repo_root: str, version: str) -> int:
+    removed = 0
+    for path in collect_build_version_dirs(repo_root):
+        if os.path.basename(path.rstrip("/\\")) != version:
+            continue
+        if remove_version_build_dir(path, repo_root):
+            removed += 1
+
+    if removed == 0:
+        print(f"no build directories found for slot '{version}'")
+    return 0
+
+
+def remove_all_build_dirs(repo_root: str) -> int:
+    removed = 0
+    for path in collect_build_version_dirs(repo_root):
+        if remove_version_build_dir(path, repo_root):
+            removed += 1
+
+    if removed == 0:
+        print("no build directories found")
+    return 0
+
+
 def resolve_prefix(path_arg: str, repo_root: str) -> str:
     if os.path.isabs(path_arg):
         return os.path.abspath(path_arg)
@@ -136,12 +160,15 @@ def validate_core_build_dir_layout(build_dir: str) -> None:
         errors.die("build directory must be under 'build/' (example: build/test/)", code=1)
 
 
-def validate_version_slot(version: str) -> str:
+def validate_version_slot(version: str, *, option_name: str = "--build") -> str:
     token = version.strip()
     if not token:
-        errors.die("--version requires a non-empty value", code=1)
+        errors.die(f"{option_name} requires a non-empty value", code=1)
     if "/" in token or "\\" in token or token in (".", "..") or ".." in token:
-        errors.die("--version must be a simple slot name (for example: latest or 0.1)", code=1)
+        errors.die(
+            f"{option_name} must be a simple slot name (for example: latest or 0.1)",
+            code=1,
+        )
     return token
 
 
@@ -178,7 +205,7 @@ def validate_sdk_prefix(prefix: str, cmake_package_name: str) -> None:
     errors.die(
         "SDK prefix is missing package config.\n"
         f"Expected:\n  {config_path}\n"
-        "Build/install SDK from a core build first (for example: ./kbuild.py --version test)."
+        "Build/install SDK from a core build first (for example: ./kbuild.py --build test)."
     )
 
 

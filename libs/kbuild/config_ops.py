@@ -62,12 +62,7 @@ def _deep_merge(base: object, overlay: object) -> object:
     return overlay
 
 
-def load_effective_kbuild_payload(
-    repo_root: str,
-    *,
-    require_local: bool,
-    require_shared: bool,
-) -> dict[str, object]:
+def load_shared_kbuild_payload(repo_root: str, *, require_shared: bool) -> dict[str, object]:
     shared_path = os.path.join(repo_root, PRIMARY_KBUILD_CONFIG_FILENAME)
     shared_payload: dict[str, object] = {}
     if os.path.isfile(shared_path):
@@ -83,14 +78,21 @@ def load_effective_kbuild_payload(
             "kbuild.json must not define key 'kbuild'. "
             "Move local bootstrap settings to './.kbuild.json'."
         )
+    return shared_payload
+
+
+def load_effective_kbuild_payload(
+    repo_root: str,
+    *,
+    require_shared: bool,
+    include_local_overlay: bool = False,
+) -> dict[str, object]:
+    shared_payload = load_shared_kbuild_payload(repo_root, require_shared=require_shared)
+    if not include_local_overlay:
+        return shared_payload
 
     local_path = os.path.join(repo_root, LOCAL_KBUILD_CONFIG_FILENAME)
     if not os.path.isfile(local_path):
-        if require_local:
-            errors.die(
-                "missing required local config file './.kbuild.json'.\n"
-                "Run './kbuild.py --kbuild-root <path>' first."
-            )
         return shared_payload
     local_payload = _load_json_object(local_path, required=False)
     if local_payload is None:  # pragma: no cover
@@ -117,7 +119,7 @@ def load_kbuild_config(
     str,
     list[tuple[str, str]],
 ]:
-    raw = load_effective_kbuild_payload(repo_root, require_local=True, require_shared=False)
+    raw = load_effective_kbuild_payload(repo_root, require_shared=True, include_local_overlay=True)
 
     allowed_top = {"project", "git", "cmake", "vcpkg", "build", "kbuild"}
     for key in raw:
@@ -300,7 +302,7 @@ def _write_json_object(path: str, payload: dict[str, object]) -> None:
         handle.write("\n")
 
 
-def create_kbuild_config_template(repo_root: str, kbuild_root_value: str) -> int:
+def create_kbuild_config_template(repo_root: str) -> int:
     config_path = os.path.join(repo_root, PRIMARY_KBUILD_CONFIG_FILENAME)
     if os.path.exists(config_path):
         errors.emit_error("'./kbuild.json' already exists.")
@@ -337,6 +339,5 @@ def create_kbuild_config_template(repo_root: str, kbuild_root_value: str) -> int
     }
     _write_json_object(config_path, payload)
     print("Created ./kbuild.json template.", flush=True)
-    print("Ensure ./.kbuild.json exists (run './kbuild.py --kbuild-root <path>') before build operations.", flush=True)
-    print(f"Suggested .kbuild.json kbuild.rootdir value: '{kbuild_root_value}'", flush=True)
+    print("Edit ./kbuild.json, then run './kbuild.py --kbuild-init'.", flush=True)
     return 0

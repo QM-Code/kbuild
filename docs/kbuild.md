@@ -17,34 +17,34 @@ If you are an agent and need a deterministic “do the right thing” sequence, 
 ### Agent decision flow
 
 1. Confirm you are in the script directory.
-2. If `kbuild.json` is missing, run `./kbuild.py --create-config` and stop for config edits.
-3. If the task is “scaffold repo”, run `./kbuild.py --initialize-repo`.
-4. If the task is “set up git remote”, run `./kbuild.py --initialize-git`.
-5. If `kbuild.json` contains `vcpkg`, run `./kbuild.py --install-vcpkg` once.
-6. For normal development builds, run `./kbuild.py`.
-7. For explicit demo-only validation, run `./kbuild.py --build-demos`.
-8. For fast rebuild loops, run `./kbuild.py --no-configure` (and `--build-demos --no-configure` as needed).
+2. If `./.kbuild.json` is missing, run `./kbuild.py --kbuild-root <directory>` and stop.
+3. If `./kbuild.json` is missing, run `./kbuild.py --kbuild-config` and stop for config edits.
+4. If the task is “scaffold repo”, run `./kbuild.py --kbuild-init`.
+5. If the task is “set up git remote”, run `./kbuild.py --git-initialize`.
+6. If `kbuild.json` contains `vcpkg`, run `./kbuild.py --vcpkg-install` once.
+7. For normal development builds, run `./kbuild.py --build-latest`.
+8. For explicit demo-only validation, run `./kbuild.py --build-demos`.
+9. For fast rebuild loops, run `./kbuild.py --build-latest --cmake-no-configure` (and `--build-demos --cmake-no-configure` as needed).
 
 ### Agent-safe default command sequence
 
 For most repos that already have config and CMake:
 
 ```bash
-./kbuild.py
+./kbuild.py --build-latest
 ```
 
 For repos with local vcpkg not yet prepared:
 
 ```bash
-./kbuild.py --install-vcpkg
-./kbuild.py
+./kbuild.py --vcpkg-install
 ```
 
 ### Agent “do not guess” rules
 
 - Do not invent new keys in `kbuild.json`; unknown keys hard-fail.
 - Do not run mutually exclusive operational flags together.
-- Do not use `--no-configure` unless a cache already exists.
+- Do not use `--cmake-no-configure` unless a cache already exists.
 - Do not assume demo names; use explicit names, `build.demos`, or `build.defaults.demos`.
 
 ## 1) Mental Model
@@ -86,7 +86,7 @@ Every option below includes what it does, how it behaves, and an example.
 
 ### `-h`, `--help`
 
-Prints usage and exits with success. This mode does not parse or validate `kbuild.json` and does not perform any build work.
+Prints usage and exits with success. `./kbuild.py` with no arguments does the same thing. This mode does not parse or validate `kbuild.json` and does not perform any build work.
 
 Example:
 
@@ -94,34 +94,81 @@ Example:
 ./kbuild.py --help
 ```
 
-### `--list-builds`
+### `--kbuild-root <dir>`
+
+Bootstraps the thin `kbuild.py` wrapper by validating a shared kbuild checkout and writing `./.kbuild.json` with `kbuild.root=<dir>`.
+
+Behavior:
+- The command validates the target by loading the shared library from `<dir>/libs`.
+- It must be run by itself; it cannot be combined with other options.
+- It is the first required step for a fresh directory that only contains `kbuild.py`.
+
+Example:
+
+```bash
+./kbuild.py --kbuild-root /path/to/kbuild
+```
+
+### `--build-list`
 
 Scans and prints existing version directories in both core and demo trees. It looks under `./build/*` and `./demo/**/build/*`, then prints normalized `./.../` paths. Use this before cleanup or when auditing retained slots.
 
 Example:
 
 ```bash
-./kbuild.py --list-builds
+./kbuild.py --build-list
 ```
 
-### `--remove-latest`
+### `--clean <name>`
+
+Removes the specified build slot from both core and demos. The value must be a simple token with no slashes and no traversal (`..`).
+
+Example:
+
+```bash
+./kbuild.py --clean ci
+```
+
+### `--clean-latest`
 
 Deletes every `latest` slot in core and demos: `./build/latest/` and `./demo/**/build/latest/`. The script has safety checks and refuses paths that do not match expected layout or are symlinked in unsafe ways.
 
 Example:
 
 ```bash
-./kbuild.py --remove-latest
+./kbuild.py --clean-latest
 ```
 
-### `--version <name>`
+### `--clean-all`
 
-Selects the build slot name (default is `latest`). The value must be a simple token with no slashes and no traversal (`..`). This affects both core and demo build directories.
+Deletes every build slot in both core and demo trees.
 
 Example:
 
 ```bash
-./kbuild.py --version ci
+./kbuild.py --clean-all
+```
+
+### `--build <name>`
+
+Selects the build slot name. The value must be a simple token with no slashes and no traversal (`..`). This affects both core and demo build directories.
+
+Example:
+
+```bash
+./kbuild.py --build ci
+```
+
+With no version argument, `--build` prints the build-specific option list.
+
+### `--build-latest`
+
+Builds the `latest` slot explicitly.
+
+Example:
+
+```bash
+./kbuild.py --build-latest
 ```
 
 ### `--build-demos [demo ...]`
@@ -144,54 +191,39 @@ Examples:
 ./kbuild.py --build-demos libraries/alpha libraries/beta executable
 ```
 
-### `--configure`
+### `--cmake-configure`
 
 Forces CMake configure before build, overriding `cmake.configure_by_default` for the current run. Use when dependency paths, toolchain settings, or CMake options changed.
 
 Example:
 
 ```bash
-./kbuild.py --configure
+./kbuild.py --cmake-configure
 ```
 
-### `--no-configure`
+### `--cmake-no-configure`
 
 Skips configure and builds from existing cache. This requires an existing `CMakeCache.txt` in the target build directory, otherwise it fails. Use for fast incremental rebuilds when configuration is stable.
 
 Example:
 
 ```bash
-./kbuild.py --no-configure
+./kbuild.py --cmake-no-configure
 ```
 
-### `--rebuild`
+### `--kbuild-config`
 
-Removes existing build directories for the selected version before build work begins.
-
-Behavior:
-- Always clears `build/<version>/` when it exists.
-- Also clears demo build dirs (`demo/<name>/build/<version>/`) for demos selected in this run.
-- Forces a configure pass for the run.
+Creates a starter `kbuild.json` template in the current directory. Run `./kbuild.py --kbuild-root <dir>` first so the wrapper can load the shared library. This only works when `kbuild.json` does not already exist, and it cannot be combined with other options.
 
 Example:
 
 ```bash
-./kbuild.py --rebuild
+./kbuild.py --kbuild-config
 ```
 
-### `--create-config`
+### `--kbuild-init`
 
-Creates a starter `kbuild.json` template in the current directory. This only works when `kbuild.json` does not already exist, and it cannot be combined with other options.
-
-Example:
-
-```bash
-./kbuild.py --create-config
-```
-
-### `--initialize-repo`
-
-Scaffolds a new repository layout from `kbuild.json` metadata. This mode is strict: the directory must be empty except for `kbuild.py` and `kbuild.json`.
+Scaffolds a new repository layout from `kbuild.json` metadata. `./kbuild.json` is required for this mode. The directory must otherwise be empty except for `kbuild.py`, `kbuild.json`, and `.kbuild.json`.
 
 It creates directories and starter files such as:
 - `CMakeLists.txt`
@@ -213,10 +245,10 @@ It creates directories and starter files such as:
 Example:
 
 ```bash
-./kbuild.py --initialize-repo
+./kbuild.py --kbuild-init
 ```
 
-### `--initialize-git`
+### `--git-initialize`
 
 Initializes local git repository state and pushes `main` to configured remote.
 
@@ -228,7 +260,7 @@ Behavior:
 Example:
 
 ```bash
-./kbuild.py --initialize-git
+./kbuild.py --git-initialize
 ```
 
 ### `--git-sync <msg>`
@@ -241,7 +273,7 @@ Example:
 ./kbuild.py --git-sync "Update build docs"
 ```
 
-### `--sync-vcpkg-baseline`
+### `--vcpkg-sync-baseline`
 
 Reads `./vcpkg/src` HEAD commit hash and writes it into:
 - `vcpkg/vcpkg.json` -> `configuration.default-registry.baseline`
@@ -250,10 +282,10 @@ Reads `./vcpkg/src` HEAD commit hash and writes it into:
 Example:
 
 ```bash
-./kbuild.py --sync-vcpkg-baseline
+./kbuild.py --vcpkg-sync-baseline
 ```
 
-### `--install-vcpkg`
+### `--vcpkg-install`
 
 Ensures local vcpkg checkout/bootstrap under repo-local `./vcpkg/src`, ensures local cache directories under `./vcpkg/build`, syncs baseline, then continues normal build flow.
 
@@ -264,43 +296,44 @@ Behavior details:
 Example:
 
 ```bash
-./kbuild.py --install-vcpkg
+./kbuild.py --vcpkg-install
 ```
 
 ## 5) Option Combination Rules
 
 `kbuild.py` enforces mode exclusivity:
 
-- `--create-config` cannot be combined with any other option.
-- `--list-builds` and `--remove-latest` cannot be combined.
-- `--list-builds` and `--remove-latest` cannot be combined with build flags.
-- `--initialize-repo` cannot be combined with build/list/remove/git flags.
-- `--initialize-git` cannot be combined with other modes.
+- `--kbuild-config` cannot be combined with any other option.
+- `--build-list` cannot be combined with other modes.
+- Clean options (`--clean <version>`, `--clean-latest`, `--clean-all`) cannot be combined with build, git, or kbuild init/config options.
+- `--kbuild-init` cannot be combined with build/list/clean/git flags.
+- `--git-initialize` cannot be combined with other modes.
 - `--git-sync` cannot be combined with other modes.
-- `--sync-vcpkg-baseline` must run alone.
-- `--rebuild` requires configure mode (it fails when `--no-configure` is the effective configure setting).
+- `--vcpkg-sync-baseline` must run alone.
 
-If both `--configure` and `--no-configure` are provided, the last one on the command line wins.
+If both `--cmake-configure` and `--cmake-no-configure` are provided, the last one on the command line wins.
 
 ## 6) End-to-End Playbooks
 
 ## Playbook A: Empty Directory to Build-Ready Repo
 
 1. Put `kbuild.py` into an empty directory.
-2. Create template config.
-3. Edit `kbuild.json` with real project metadata.
-4. Initialize repo scaffold.
-5. Initialize git remote.
-6. Install vcpkg and build.
+2. Point the wrapper at the shared kbuild library.
+3. Create template config.
+4. Edit `kbuild.json` with real project metadata.
+5. Initialize repo scaffold.
+6. Initialize git remote.
+7. Install vcpkg and build.
 
 Commands:
 
 ```bash
-./kbuild.py --create-config
+./kbuild.py --kbuild-root <path-to-kbuild>
+./kbuild.py --kbuild-config
 # edit kbuild.json
-./kbuild.py --initialize-repo
-./kbuild.py --initialize-git
-./kbuild.py --install-vcpkg
+./kbuild.py --kbuild-init
+./kbuild.py --git-initialize
+./kbuild.py --vcpkg-install
 ```
 
 ## Playbook B: Typical Existing Repo Day-to-Day
@@ -308,14 +341,14 @@ Commands:
 Build core SDK and then demos in default order:
 
 ```bash
-./kbuild.py
+./kbuild.py --build-latest
 ```
 
 Fast rebuild without reconfigure:
 
 ```bash
-./kbuild.py --no-configure
-./kbuild.py --build-demos --no-configure
+./kbuild.py --build-latest --cmake-no-configure
+./kbuild.py --build-demos --cmake-no-configure
 ```
 
 ## Playbook C: Multiple SDK Dependencies + Multiple Demos
@@ -330,14 +363,14 @@ Example sequence:
 
 ```bash
 cd ../kcli
-./kbuild.py --version dev
+./kbuild.py --build dev
 
 cd ../ktrace
-./kbuild.py --version dev --install-vcpkg
+./kbuild.py --build dev --vcpkg-install
 
 cd ../myproject
-./kbuild.py --version dev --install-vcpkg
-./kbuild.py --version dev --build-demos
+./kbuild.py --build dev --vcpkg-install
+./kbuild.py --build dev --build-demos
 ```
 
 If your `kbuild.json` includes:
@@ -444,7 +477,7 @@ If `cmake` is omitted, default build mode has no build plan and returns `Nothing
 
 ### `cmake.minimum_version`
 
-Optional string, validated if present. Primarily used by repo initialization templates (`--initialize-repo`) for generated `CMakeLists.txt` minimum version.
+Optional string, validated if present. Primarily used by repo initialization templates (`--kbuild-init`) for generated `CMakeLists.txt` minimum version.
 
 ### `cmake.configure_by_default`
 
@@ -459,7 +492,7 @@ Optional object.
 Required when `cmake.sdk` exists. Non-empty string naming the exported CMake package (for example `KcliSDK`).
 
 Important:
-- All demo builds require this metadata (`--build-demos` and `build.defaults.demos` on plain `./kbuild.py`).
+- All demo builds require this metadata (`--build-demos` and `build.defaults.demos` on `./kbuild.py --build-latest`).
 - The value is used to generate and pass `-D<PackageName>_DIR` hints.
 
 ### `cmake.dependencies`
@@ -478,7 +511,7 @@ Rules:
 - Dependency key must be a non-empty string.
 - Dependency object currently supports only `prefix`.
 - `prefix` must be a non-empty string.
-- `{version}` token is replaced by active slot (from `--version`).
+- `{version}` token is replaced by active slot (from `--build`).
 - Dependency package name cannot equal this repo's own `cmake.sdk.package_name`.
 
 Validation performed:
@@ -496,7 +529,7 @@ If present, build flow expects repo-local vcpkg setup and injects toolchain inte
 
 ### `vcpkg.dependencies`
 
-Optional array of non-empty strings. Parsed/validated by `kbuild.py`, and also used by `--initialize-repo` to generate `vcpkg/vcpkg.json` dependencies.
+Optional array of non-empty strings. Parsed/validated by `kbuild.py`, and also used by `--kbuild-init` to generate `vcpkg/vcpkg.json` dependencies.
 
 Package install resolution happens later via CMake + manifest mode.
 
@@ -512,7 +545,7 @@ Optional object for default build behavior values.
 
 ### `build.defaults.demos`
 
-Optional array of non-empty strings. Used by plain `./kbuild.py` (no `--build-demos`) to auto-build demos after core build succeeds.
+Optional array of non-empty strings. Used by `./kbuild.py --build-latest` (without `--build-demos`) to auto-build demos after core build succeeds.
 
 ## 8) Multi-SDK Demo Orchestration Deep Dive
 
@@ -542,7 +575,7 @@ When `vcpkg` config exists and build mode runs:
   - `VCPKG_DOWNLOADS` set to repo-local cache unless already defined
   - `VCPKG_DEFAULT_BINARY_CACHE` set to repo-local cache unless already defined
 
-`--install-vcpkg` performs initial clone/bootstrap and baseline sync.
+`--vcpkg-install` performs initial clone/bootstrap and baseline sync.
 
 Baseline sync source of truth:
 - commit hash from `git -C ./vcpkg/src rev-parse HEAD`
@@ -552,8 +585,8 @@ Files updated:
 
 ## 10) Repo Initialization Details
 
-`--initialize-repo` requires directory hygiene:
-- allowed existing entries before run: only `kbuild.py`, `kbuild.json`
+`--kbuild-init` requires directory hygiene:
+- allowed existing entries before run: only `kbuild.py`, `kbuild.json`, `.kbuild.json`
 - any extra file/dir triggers a hard error
 
 Generated structure always includes:
@@ -577,7 +610,7 @@ If `cmake.sdk.package_name` is defined, it also generates:
 
 ## 11) Git Operation Details
 
-`--initialize-git` does these checks/actions:
+`--git-initialize` does these checks/actions:
 - verifies remote is reachable (`git ls-remote <git.url>`)
 - performs auth preflight via dry-run push from temp repo to `git.auth`
 - `git init`, set branch `main`
@@ -600,20 +633,28 @@ If `cmake.sdk.package_name` is defined, it also generates:
 
 ## 13) Common Failure Cases and Fixes
 
-### `Error: 'kbuild.json' does not exist.`
+### `missing required local config file './.kbuild.json'`
+
+Bootstrap the wrapper first:
+
+```bash
+./kbuild.py --kbuild-root <path-to-kbuild>
+```
+
+### `missing required config file './kbuild.json'`
 
 Create it first:
 
 ```bash
-./kbuild.py --create-config
+./kbuild.py --kbuild-config
 ```
 
-### `--no-configure requires an existing CMakeCache.txt`
+### `--cmake-no-configure requires an existing CMakeCache.txt`
 
 Run with configure once, then retry:
 
 ```bash
-./kbuild.py --configure
+./kbuild.py --cmake-configure
 ```
 
 ### `demo builds require SDK metadata`
@@ -629,12 +670,12 @@ Your `cmake.dependencies.<pkg>.prefix` path is wrong or dependency SDK is not bu
 Initialize local vcpkg first:
 
 ```bash
-./kbuild.py --install-vcpkg
+./kbuild.py --vcpkg-install
 ```
 
-### `--initialize-repo must be run from an empty directory`
+### `--kbuild-init must be run from an empty directory`
 
-Move existing files out or start in a clean directory containing only `kbuild.py` and `kbuild.json`.
+Move existing files out or start in a clean directory containing only `kbuild.py`, `kbuild.json`, and `.kbuild.json`.
 
 ### `unknown option '--xyz'`
 
@@ -649,40 +690,41 @@ The script has strict argument parsing. Re-check the option spelling in the opti
 Scaffold from zero:
 
 ```bash
-./kbuild.py --create-config
-./kbuild.py --initialize-repo
-./kbuild.py --initialize-git
+./kbuild.py --kbuild-root <path-to-kbuild>
+./kbuild.py --kbuild-config
+./kbuild.py --kbuild-init
+./kbuild.py --git-initialize
 ```
 
 Core build + demos (default slot):
 
 ```bash
-./kbuild.py
+./kbuild.py --build-latest
 ```
 
 Core build + demos (custom slot):
 
 ```bash
-./kbuild.py --version dev
+./kbuild.py --build dev
 ```
 
 Install/update local vcpkg then build:
 
 ```bash
-./kbuild.py --install-vcpkg
+./kbuild.py --vcpkg-install
 ```
 
 Sync vcpkg baseline only:
 
 ```bash
-./kbuild.py --sync-vcpkg-baseline
+./kbuild.py --vcpkg-sync-baseline
 ```
 
 List and clean latest slots:
 
 ```bash
-./kbuild.py --list-builds
-./kbuild.py --remove-latest
+./kbuild.py --build-list
+./kbuild.py --clean-latest
 ```
 
 ## 15) Final Advice for Multi-Repo SDK Stacks

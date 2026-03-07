@@ -249,7 +249,7 @@ def git_sync(repo_root: str, commit_message: str) -> int:
         text=True,
     )
     if worktree_check.returncode != 0 or worktree_check.stdout.strip().lower() != "true":
-        errors.die("git repository is not initialized. Run `./kbuild.py --initialize-git`.")
+        errors.die("git repository is not initialized. Run `./kbuild.py --git-initialize`.")
 
     add_result = subprocess.run(["git", "-C", repo_root, "add", "."], check=False)
     if add_result.returncode != 0:

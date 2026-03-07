@@ -25,11 +25,7 @@ def _default_project_id(repo_root: str) -> str:
 
 
 def load_initialize_repo_config(repo_root: str) -> dict[str, object]:
-    raw = config_ops.load_effective_kbuild_payload(
-        repo_root,
-        require_local=True,
-        require_shared=False,
-    )
+    raw = config_ops.load_shared_kbuild_payload(repo_root, require_shared=True)
 
     allowed_top = {"project", "git", "cmake", "vcpkg", "build", "kbuild"}
     for key in raw:
@@ -147,15 +143,15 @@ def ensure_directory_for_init(path: str) -> bool:
 
 
 def ensure_initialize_repo_root_empty(repo_root: str) -> None:
-    allowed_entries = {"kbuild.py", ".kbuild.json"}
+    allowed_entries = {"kbuild.py", "kbuild.json", ".kbuild.json"}
     unexpected_entries = sorted(entry for entry in os.listdir(repo_root) if entry not in allowed_entries)
     if not unexpected_entries:
         return
 
     details = "\n".join(f"  {entry}" for entry in unexpected_entries)
     errors.die(
-        "--initialize-repo must be run from an empty directory "
-        "(other than kbuild.py and .kbuild.json).\n"
+        "--kbuild-init must be run from an empty directory "
+        "(other than kbuild.py, kbuild.json, and .kbuild.json).\n"
         "Found:\n"
         f"{details}"
     )
@@ -299,7 +295,7 @@ def initialize_repo_layout(
         readme_build_section = (
             "## Build SDK\n\n"
             "```bash\n"
-            "./kbuild.py\n"
+            "./kbuild.py --build-latest\n"
             "```\n\n"
             "SDK output:\n"
             "- `build/latest/sdk/include`\n"
@@ -310,7 +306,7 @@ def initialize_repo_layout(
             "## Build and Test Demos\n\n"
             "```bash\n"
             "# Builds SDK plus kbuild.json \"build.defaults.demos\".\n"
-            "./kbuild.py\n\n"
+            "./kbuild.py --build-latest\n\n"
             "# Explicit demo-only run (uses build.demos when no args are provided).\n"
             "./kbuild.py --build-demos\n\n"
             "./demo/executable/build/latest/test\n"
@@ -325,7 +321,7 @@ def initialize_repo_layout(
         readme_build_section = (
             "## Build\n\n"
             "```bash\n"
-            "./kbuild.py\n"
+            "./kbuild.py --build-latest\n"
             "```\n\n"
             "Build output:\n"
             "- `build/latest/`\n\n"
@@ -334,7 +330,7 @@ def initialize_repo_layout(
         readme_build_section = (
             "## Build\n\n"
             "This scaffold does not define a CMake project yet.\n"
-            "Add `cmake` settings to `kbuild.json` before running `./kbuild.py`.\n\n"
+            "Add `cmake` settings to `kbuild.json` before running `./kbuild.py --build-latest`.\n\n"
         )
 
     readme_content = render_template(

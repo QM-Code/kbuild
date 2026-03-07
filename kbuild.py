@@ -3,10 +3,46 @@
 import json
 import os
 import sys
+from collections.abc import Callable
 
 
 WRAPPER_API = "1"
 LOCAL_CONFIG_FILENAME = ".kbuild.json"
+
+
+def print_usage(exit_code: int = 0) -> None:
+    print("Usage: kbuild.py <options>", file=sys.stderr)
+    print("", file=sys.stderr)
+    print("Initialization options:", file=sys.stderr)
+    print("  --kbuild-root <dir>     validate a shared kbuild checkout and update ./.kbuild.json", file=sys.stderr)
+    print("  --kbuild-config         create a starter kbuild.json template", file=sys.stderr)
+    print("  --kbuild-init           scaffold this repo from ./kbuild.json", file=sys.stderr)
+    print("", file=sys.stderr)
+    print("Build options:", file=sys.stderr)
+    print("  --build [version]       build a version slot under build/; with no version prints this section", file=sys.stderr)
+    print("  --build-latest          build the latest slot", file=sys.stderr)
+    print("  --build-demos [demo ...]  build demos in order; with no args uses kbuild.json build.demos", file=sys.stderr)
+    print("  --build-type <t>        build type: static|shared|both", file=sys.stderr)
+    print("  --build-jobs <n>        number of parallel jobs for cmake --build", file=sys.stderr)
+    print("  --build-list            list existing build version directories", file=sys.stderr)
+    print("", file=sys.stderr)
+    print("CMake options:", file=sys.stderr)
+    print("  --cmake-configure       force cmake configure step", file=sys.stderr)
+    print("  --cmake-no-configure    skip cmake configure step", file=sys.stderr)
+    print("", file=sys.stderr)
+    print("Git options:", file=sys.stderr)
+    print("  --git-initialize        verify remote, initialize local git repo, commit, and push main", file=sys.stderr)
+    print("  --git-sync <msg>        git add . && git commit -m <msg> && git push", file=sys.stderr)
+    print("", file=sys.stderr)
+    print("VCpkg options:", file=sys.stderr)
+    print("  --vcpkg-install         clone/bootstrap local vcpkg under ./vcpkg, sync baseline, then build", file=sys.stderr)
+    print("  --vcpkg-sync-baseline   set baseline fields from ./vcpkg/src HEAD", file=sys.stderr)
+    print("", file=sys.stderr)
+    print("Clean options:", file=sys.stderr)
+    print("  --clean [version]       remove a specific build version; with no version prints this section", file=sys.stderr)
+    print("  --clean-latest          remove every build/latest/ directory", file=sys.stderr)
+    print("  --clean-all             remove every build version directory", file=sys.stderr)
+    raise SystemExit(exit_code)
 
 
 def fail(message: str, *, exit_code: int = 2) -> None:
@@ -87,7 +123,7 @@ def _write_local_root_override(repo_root: str, root_token: str) -> None:
     if not isinstance(kbuild_raw, dict):
         kbuild_raw = {}
 
-    kbuild_raw["rootdir"] = root_token
+    kbuild_raw["root"] = root_token
     kbuild_raw["api"] = WRAPPER_API
     payload["kbuild"] = kbuild_raw
     _write_json_object(local_path, payload)
@@ -97,11 +133,11 @@ def load_config_root_token(repo_root: str) -> str:
     payload = _load_local_config(repo_root)
     kbuild_raw = payload.get("kbuild")
     if not isinstance(kbuild_raw, dict):
-        fail("kbuild.rootdir is required in .kbuild.json. Run './kbuild.py --kbuild-root <path>' first.")
+        fail("kbuild.root is required in .kbuild.json. Run './kbuild.py --kbuild-root <path>' first.")
 
-    root_raw = kbuild_raw.get("rootdir")
+    root_raw = kbuild_raw.get("root")
     if not isinstance(root_raw, str) or not root_raw.strip():
-        fail("kbuild.rootdir is required in .kbuild.json. Run './kbuild.py --kbuild-root <path>' first.")
+        fail("kbuild.root is required in .kbuild.json. Run './kbuild.py --kbuild-root <path>' first.")
 
     api_raw = kbuild_raw.get("api")
     if api_raw is not None:
@@ -130,32 +166,18 @@ def resolve_rootdir(repo_root: str, root_token: str) -> str:
 
     if not os.path.isdir(root_abs):
         fail(
-            f"kbuild.rootdir resolves to '{root_abs}' but does not exist. "
+            f"kbuild.root resolves to '{root_abs}' but does not exist. "
             "Run './kbuild.py --kbuild-root <path>' with a valid kbuild directory."
         )
 
     return root_abs
 
 
-def main() -> int:
-    repo_root = enforce_script_directory()
-    raw_args = sys.argv[1:]
-
-    root_override, passthrough_args = parse_bootstrap_root_arg(raw_args)
-
-    if root_override is not None:
-        root_abs = resolve_rootdir(repo_root, root_override)
-        _write_local_root_override(repo_root, root_override)
-    else:
-        root_token = load_config_root_token(repo_root)
-        root_abs = resolve_rootdir(repo_root, root_token)
-
+def load_core_runner(root_abs: str) -> Callable[..., int]:
     libs_dir = os.path.join(root_abs, "libs")
-    if not os.path.isdir(libs_dir):
-        fail(
-            f"kbuild.rootdir points to '{root_abs}', but required library directory is missing: {libs_dir}. "
-            "Run './kbuild.py --kbuild-root <path>' with a valid kbuild directory."
-        )
+    package_init = os.path.join(libs_dir, "kbuild", "__init__.py")
+    if not os.path.isfile(package_init):
+        raise ValueError(f"required shared library package is missing: {package_init}")
 
     if libs_dir not in sys.path:
         sys.path.insert(0, libs_dir)
@@ -163,18 +185,53 @@ def main() -> int:
     try:
         from kbuild import run as run_core
     except Exception as exc:  # pragma: no cover
-        fail(f"failed to load shared kbuild library from {libs_dir}: {exc}")
+        raise ValueError(f"failed to load shared kbuild library from {libs_dir}: {exc}") from exc
 
-    if root_override is not None and not passthrough_args:
-        print(f"Updated ./.kbuild.json with kbuild.rootdir='{root_override}'", flush=True)
+    return run_core
+
+
+def main() -> int:
+    repo_root = enforce_script_directory()
+    raw_args = sys.argv[1:]
+
+    if not raw_args:
+        print_usage(0)
+    if len(raw_args) == 1 and raw_args[0] in ("-h", "--help"):
+        print_usage(0)
+
+    root_override, passthrough_args = parse_bootstrap_root_arg(raw_args)
+
+    if root_override is not None:
+        if passthrough_args:
+            fail(
+                "--kbuild-root cannot be combined with other options. "
+                "Run './kbuild.py --kbuild-root <path>' by itself.",
+                exit_code=1,
+            )
+        root_abs = resolve_rootdir(repo_root, root_override)
+        try:
+            load_core_runner(root_abs)
+        except ValueError as exc:
+            fail(f"--kbuild-root path is not a valid kbuild directory: {exc}", exit_code=1)
+        _write_local_root_override(repo_root, root_override)
+        print(f"Updated ./.kbuild.json with kbuild.root='{root_override}'", flush=True)
         return 0
+
+    root_token = load_config_root_token(repo_root)
+    root_abs = resolve_rootdir(repo_root, root_token)
+    try:
+        run_core = load_core_runner(root_abs)
+    except ValueError as exc:
+        fail(
+            "could not bootstrap from ./.kbuild.json: "
+            f"{exc}. Run './kbuild.py --kbuild-root <path>' first."
+        )
 
     return run_core(
         repo_root=repo_root,
-        argv=passthrough_args,
+        argv=raw_args,
         kbuild_root=root_abs,
         program_name=os.path.basename(sys.argv[0]),
-        bootstrap_root_override=root_override,
     )
 
 

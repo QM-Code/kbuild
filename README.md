@@ -5,13 +5,16 @@ Standardized build tooling for ktools projects.
 ## Build
 
 ```bash
-./kbuild.py --help
+./kbuild.py
 ```
 
 ## Usage
 - Grab the latest git release: https://github.com/QM-Code/kbuild
 - Copy `kbuild.py` to an empty directory.
-- Run `./kbuild.py --create-config --kbuild-root <directory>`.
+- Run `./kbuild.py --kbuild-root <directory>`.
+- Run `./kbuild.py --kbuild-config`.
+- Edit `./kbuild.json`.
+- Run `./kbuild.py --kbuild-init`.
 
 `<directory>` should be the relative or absolute path to the pulled `kbuild` directory (where you copied `kbuild.py` from).
 

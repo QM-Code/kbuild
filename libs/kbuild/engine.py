@@ -16,39 +16,96 @@ from . import vcpkg_ops
 PROGRAM_NAME = "kbuild.py"
 
 
+def print_build_usage(*, file: object) -> None:
+    print("Build options:", file=file)
+    print(
+        "  --build [version]       build a version slot under build/; with no version prints this section",
+        file=file,
+    )
+    print("  --build-latest          build the latest slot", file=file)
+    print(
+        "  --build-demos [demo ...]  build demos in order; with no args uses kbuild.json build.demos",
+        file=file,
+    )
+    print("  --build-type <t>        build type: static|shared|both", file=file)
+    print("  --build-jobs <n>        number of parallel jobs for cmake --build", file=file)
+    print("  --build-list            list existing build version directories", file=file)
+
+
+def print_clean_usage(*, file: object) -> None:
+    print("Clean options:", file=file)
+    print(
+        "  --clean [version]       remove a specific build version; with no version prints this section",
+        file=file,
+    )
+    print("  --clean-latest          remove every build/latest/ directory", file=file)
+    print("  --clean-all             remove every build version directory", file=file)
+
+
 def usage(exit_code: int = 1) -> None:
     prog = PROGRAM_NAME
     print(f"Usage: {prog} <options>", file=sys.stderr)
-    print("  --list-builds       list existing build version directories", file=sys.stderr)
-    print("  --remove-latest     remove every build/latest/ directory", file=sys.stderr)
-    print("  --version <name>    build version slot under build/ (default: latest)", file=sys.stderr)
-    print("  --build-jobs <n>    number of parallel jobs for cmake --build", file=sys.stderr)
-    print("  --build-type <t>    build type: static|shared|both", file=sys.stderr)
+    print("", file=sys.stderr)
+    print("Initialization options:", file=sys.stderr)
     print(
-        "  --build-demos [demo ...]  build demos in order; with no args uses kbuild.json build.demos",
+        "  --kbuild-root <dir>     validate a shared kbuild checkout and update ./.kbuild.json",
         file=sys.stderr,
     )
-    print("  --rebuild          remove existing build directory/directories before building", file=sys.stderr)
-    print("  --configure         force cmake configure step", file=sys.stderr)
-    print("  --no-configure      skip cmake configure step", file=sys.stderr)
-    print("  --create-config     create a starter kbuild.json template", file=sys.stderr)
-    print("                     (kbuild.json is optional; this is a convenience scaffold)", file=sys.stderr)
-    print("  --initialize-repo   scaffold this repo using merged config (.kbuild.json required)", file=sys.stderr)
+    print("  --kbuild-config         create a starter kbuild.json template", file=sys.stderr)
+    print("  --kbuild-init           scaffold this repo from ./kbuild.json", file=sys.stderr)
+    print("", file=sys.stderr)
+    print_build_usage(file=sys.stderr)
+    print("", file=sys.stderr)
+    print("CMake options:", file=sys.stderr)
+    print("  --cmake-configure       force cmake configure step", file=sys.stderr)
+    print("  --cmake-no-configure    skip cmake configure step", file=sys.stderr)
+    print("", file=sys.stderr)
+    print("Git options:", file=sys.stderr)
     print(
-        "  --initialize-git    verify remote, initialize local git repo, commit, and push main",
+        "  --git-initialize        verify remote, initialize local git repo, commit, and push main",
         file=sys.stderr,
     )
-    print("  --git-sync <msg>    git add . && git commit -m <msg> && git push", file=sys.stderr)
-    print("  --sync-vcpkg-baseline  set baseline fields from ./vcpkg/src HEAD", file=sys.stderr)
+    print("  --git-sync <msg>        git add . && git commit -m <msg> && git push", file=sys.stderr)
+    print("", file=sys.stderr)
+    print("VCpkg options:", file=sys.stderr)
     print(
-        "  --install-vcpkg     clone/bootstrap local vcpkg under ./vcpkg, sync baseline, then build",
+        "  --vcpkg-install         clone/bootstrap local vcpkg under ./vcpkg, sync baseline, then build",
         file=sys.stderr,
     )
+    print(
+        "  --vcpkg-sync-baseline   set baseline fields from ./vcpkg/src HEAD",
+        file=sys.stderr,
+    )
+    print("", file=sys.stderr)
+    print_clean_usage(file=sys.stderr)
+    raise SystemExit(exit_code)
+
+
+def usage_build(exit_code: int = 0) -> None:
+    print(f"Usage: {PROGRAM_NAME} --build [version] [build options]", file=sys.stderr)
+    print_build_usage(file=sys.stderr)
+    raise SystemExit(exit_code)
+
+
+def usage_clean(exit_code: int = 0) -> None:
+    print(f"Usage: {PROGRAM_NAME} --clean [version] [clean options]", file=sys.stderr)
+    print_clean_usage(file=sys.stderr)
     raise SystemExit(exit_code)
 
 
 def fail(message: str) -> None:
     errors.die_with_usage(message, usage, code=1)
+
+
+def ensure_shared_config_exists(repo_root: str) -> None:
+    config_path = os.path.join(repo_root, config_ops.PRIMARY_KBUILD_CONFIG_FILENAME)
+    if os.path.isfile(config_path):
+        return
+    errors.die(
+        "missing required config file './kbuild.json'.\n"
+        "Run './kbuild.py --kbuild-config' first.",
+        code=1,
+    )
 
 
 def run(cmd: list[str], *, env: dict[str, str] | None = None) -> None:
@@ -74,22 +131,27 @@ def main(
     args: list[str],
     templates_root: str,
     program_name: str = "kbuild.py",
-    bootstrap_root_override: str | None = None,
 ) -> int:
     global PROGRAM_NAME
     PROGRAM_NAME = program_name
 
+    if not args:
+        usage(0)
+
     version = "latest"
     version_explicit = False
+    build_requested = False
     configure_override: bool | None = None
     configure_flag_seen = False
     create_config = False
     install_vcpkg = False
     sync_vcpkg_baseline_only = False
     build_demos = False
-    rebuild = False
     list_builds = False
-    remove_latest_builds = False
+    clean_requested = False
+    clean_version: str | None = None
+    clean_latest = False
+    clean_all = False
     initialize_repo = False
     initialize_git = False
     git_sync_requested = False
@@ -103,15 +165,22 @@ def main(
         arg = args[i]
         if arg in ("-h", "--help"):
             usage(0)
-        elif arg == "--create-config":
+        elif arg == "--kbuild-config":
             create_config = True
-        elif arg == "--list-builds":
+        elif arg == "--build-list":
             list_builds = True
-        elif arg == "--remove-latest":
-            remove_latest_builds = True
-        elif arg == "--initialize-repo":
+        elif arg == "--clean-latest":
+            clean_latest = True
+        elif arg == "--clean-all":
+            clean_all = True
+        elif arg == "--clean":
+            clean_requested = True
+            if i + 1 < len(args) and not args[i + 1].startswith("-"):
+                i += 1
+                clean_version = build_ops.validate_version_slot(args[i], option_name="--clean")
+        elif arg == "--kbuild-init":
             initialize_repo = True
-        elif arg == "--initialize-git":
+        elif arg == "--git-initialize":
             initialize_git = True
         elif arg == "--git-sync":
             git_sync_requested = True
@@ -121,15 +190,20 @@ def main(
             git_sync_message = args[i].strip()
             if not git_sync_message:
                 fail("--git-sync requires a non-empty commit message")
-        elif arg == "--sync-vcpkg-baseline":
+        elif arg == "--vcpkg-sync-baseline":
             sync_vcpkg_baseline_only = True
-        elif arg == "--version":
-            i += 1
-            if i >= len(args):
-                fail("missing value for '--version'")
-            version = build_ops.validate_version_slot(args[i])
+        elif arg == "--build":
+            build_requested = True
+            if i + 1 < len(args) and not args[i + 1].startswith("-"):
+                i += 1
+                version = build_ops.validate_version_slot(args[i], option_name="--build")
+                version_explicit = True
+        elif arg == "--build-latest":
+            build_requested = True
+            version = "latest"
             version_explicit = True
         elif arg == "--build-jobs":
+            build_requested = True
             i += 1
             if i >= len(args):
                 fail("missing value for '--build-jobs'")
@@ -141,6 +215,7 @@ def main(
                 fail("--build-jobs requires a positive integer")
             build_jobs_override = parsed_jobs
         elif arg == "--build-type":
+            build_requested = True
             i += 1
             if i >= len(args):
                 fail("missing value for '--build-type'")
@@ -149,105 +224,120 @@ def main(
                 fail("--build-type must be one of: static, shared, both")
             build_type_override = parsed_build_type
         elif arg == "--build-demos":
+            build_requested = True
             build_demos = True
             i += 1
             while i < len(args) and not args[i].startswith("-"):
                 requested_demos.append(args[i])
                 i += 1
             continue
-        elif arg == "--rebuild":
-            rebuild = True
-        elif arg == "--configure":
+        elif arg == "--cmake-configure":
+            build_requested = True
             configure_override = True
             configure_flag_seen = True
-        elif arg == "--no-configure":
+        elif arg == "--cmake-no-configure":
+            build_requested = True
             configure_override = False
             configure_flag_seen = True
-        elif arg == "--install-vcpkg":
+        elif arg == "--vcpkg-install":
+            build_requested = True
             install_vcpkg = True
         elif arg.startswith("-"):
             fail(f"unknown option '{arg}'")
         else:
-            fail(f"unexpected positional argument '{arg}'; use --version <name>")
+            fail(f"unexpected positional argument '{arg}'; use --build <name>")
         i += 1
 
-    build_mode_flags: list[str] = []
-    if version_explicit:
-        build_mode_flags.append("--version")
-    if build_jobs_override is not None:
-        build_mode_flags.append("--build-jobs")
-    if build_type_override is not None:
-        build_mode_flags.append("--build-type")
-    if build_demos:
-        build_mode_flags.append("--build-demos")
-    if configure_flag_seen:
-        build_mode_flags.append("--configure/--no-configure")
-    if rebuild:
-        build_mode_flags.append("--rebuild")
-    if install_vcpkg:
-        build_mode_flags.append("--install-vcpkg")
+    build_help_requested = build_requested and not (
+        version_explicit
+        or build_demos
+        or build_jobs_override is not None
+        or build_type_override is not None
+        or configure_flag_seen
+        or install_vcpkg
+    )
+    clean_help_requested = clean_requested and clean_version is None and not clean_latest and not clean_all
+
+    if build_help_requested:
+        usage_build(0)
+    if clean_help_requested:
+        usage_clean(0)
+
+    clean_target_count = int(clean_version is not None) + int(clean_latest) + int(clean_all)
+    if clean_target_count > 1:
+        fail("use only one clean target: --clean <version>, --clean-latest, or --clean-all")
+
+    build_mode = build_requested or version_explicit or build_demos or build_jobs_override is not None or build_type_override is not None or configure_flag_seen or install_vcpkg
+    clean_mode = clean_target_count > 0
 
     if create_config and (
         list_builds
-        or remove_latest_builds
+        or clean_mode
         or initialize_repo
         or initialize_git
         or git_sync_requested
         or sync_vcpkg_baseline_only
-        or bool(build_mode_flags)
+        or build_mode
     ):
-        fail("--create-config cannot be combined with other options")
+        fail("--kbuild-config cannot be combined with other options")
 
-    if list_builds and remove_latest_builds:
-        fail("--list-builds and --remove-latest cannot be combined")
-    if list_builds and build_mode_flags:
-        fail("--list-builds cannot be combined with build options")
-    if remove_latest_builds and build_mode_flags:
-        fail("--remove-latest cannot be combined with build options")
-    if initialize_repo and (list_builds or remove_latest_builds or build_mode_flags):
-        fail("--initialize-repo cannot be combined with other options")
+    if list_builds and (clean_mode or initialize_repo or initialize_git or git_sync_requested or sync_vcpkg_baseline_only or build_mode):
+        fail("--build-list cannot be combined with other options")
+    if clean_mode and (initialize_repo or initialize_git or git_sync_requested or sync_vcpkg_baseline_only or build_mode or list_builds):
+        fail("clean options cannot be combined with build, git, or kbuild init/config options")
+    if initialize_repo and (list_builds or clean_mode or initialize_git or git_sync_requested or sync_vcpkg_baseline_only or build_mode):
+        fail("--kbuild-init cannot be combined with other options")
     if initialize_git and (
         list_builds
-        or remove_latest_builds
+        or clean_mode
         or initialize_repo
         or git_sync_requested
         or sync_vcpkg_baseline_only
-        or bool(build_mode_flags)
+        or build_mode
+        or create_config
     ):
-        fail("--initialize-git cannot be combined with other options")
+        fail("--git-initialize cannot be combined with other options")
     if git_sync_requested and (
         list_builds
-        or remove_latest_builds
+        or clean_mode
         or initialize_repo
         or initialize_git
         or sync_vcpkg_baseline_only
-        or bool(build_mode_flags)
+        or build_mode
+        or create_config
     ):
         fail("--git-sync cannot be combined with other options")
     if sync_vcpkg_baseline_only and (
         list_builds
-        or remove_latest_builds
+        or clean_mode
         or initialize_repo
         or initialize_git
         or git_sync_requested
-        or build_mode_flags
+        or build_mode
+        or create_config
     ):
-        fail("--sync-vcpkg-baseline cannot be combined with other options")
+        fail("--vcpkg-sync-baseline cannot be combined with other options")
+
+    if not create_config:
+        ensure_shared_config_exists(repo_root)
 
     if initialize_repo:
         return repo_init.initialize_repo_layout(repo_root, templates_root)
     if create_config:
-        root_hint = bootstrap_root_override if bootstrap_root_override is not None else "."
-        return config_ops.create_kbuild_config_template(repo_root, root_hint)
+        return config_ops.create_kbuild_config_template(repo_root)
     if initialize_git:
         git_url, git_auth = git_ops.load_git_urls(repo_root)
         return git_ops.initialize_git_repo(repo_root, git_url, git_auth)
     if git_sync_requested:
         return git_ops.git_sync(repo_root, git_sync_message)
-    if remove_latest_builds:
-        return build_ops.remove_latest_build_dirs(repo_root)
     if list_builds:
         return build_ops.list_build_dirs(repo_root)
+    if clean_latest:
+        return build_ops.remove_latest_build_dirs(repo_root)
+    if clean_all:
+        return build_ops.remove_all_build_dirs(repo_root)
+    if clean_version is not None:
+        return build_ops.remove_build_dirs_for_slot(repo_root, clean_version)
 
     (
         project_id,
@@ -284,11 +374,6 @@ def main(
     build_static = build_type in {"static", "both"}
     build_shared = build_type in {"shared", "both"}
     configure = configure_by_default if configure_override is None else configure_override
-    if rebuild:
-        if configure_override is False:
-            fail("--rebuild cannot be combined with --no-configure")
-        configure = True
-
     demo_order: list[str] = []
     if build_demos:
         if requested_demos:
@@ -307,18 +392,6 @@ def main(
             )
         for demo_name in demo_order:
             build_ops.resolve_demo_source_dir(repo_root, demo_name)
-
-    if rebuild:
-        removed = 0
-        core_build_dir = os.path.join(repo_root, "build", version)
-        if build_ops.remove_version_build_dir(core_build_dir, repo_root):
-            removed += 1
-        for demo_name in demo_order:
-            demo_build_dir = os.path.join(repo_root, "demo", demo_name, "build", version)
-            if build_ops.remove_version_build_dir(demo_build_dir, repo_root):
-                removed += 1
-        if removed == 0:
-            print(f"no existing build directories found for --rebuild (version={version})")
 
     build_dir = os.path.join("build", version)
 
@@ -360,7 +433,7 @@ def main(
     if not configure:
         cache_path = os.path.join(build_dir, "CMakeCache.txt")
         if not os.path.isfile(cache_path):
-            fail("--no-configure requires an existing CMakeCache.txt in the build directory")
+            fail("--cmake-no-configure requires an existing CMakeCache.txt in the build directory")
     else:
         os.makedirs(build_dir, exist_ok=True)
         run(["cmake", "-S", source_dir, "-B", build_dir, *cmake_args], env=env)

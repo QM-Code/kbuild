@@ -13,6 +13,6 @@ int main(int argc, char** argv) {
     {{PROJECT_ID}}::demo::beta::EmitDemoOutput();
     {{PROJECT_ID}}::demo::gamma::EmitDemoOutput();
 
-    std::cout << "{{PROJECT_ID_UPPER}} demo executable compile/link/integration check passed\\n";
+    std::cout << "{{PROJECT_ID_UPPER}} demo {{DEMO_TITLE_LOWER}} compile/link/integration check passed\\n";
     return 0;
 }

@@ -20,7 +20,7 @@ void Initialize() {
 
 void EmitDemoOutput() {
     Initialize();
-    std::cout << "[{{LIBRARY_ID}}] demo library initialized\\n";
+    std::cout << "[{{LIBRARY_ID}}] demo sdk initialized\\n";
 }
 
 } // namespace {{PROJECT_ID}}::demo::{{LIBRARY_ID}}

@@ -214,6 +214,22 @@ def initialize_repo_layout(
     has_vcpkg = bool(config["has_vcpkg"])
     vcpkg_dependencies = list(config["vcpkg_dependencies"])
     demo_library_ids = ["alpha", "beta", "gamma"]
+    demo_executable_specs = [
+        {
+            "demo_id": "core",
+            "demo_title": "Core",
+            "demo_title_lower": "core",
+            "demo_purpose": "basic end-to-end",
+            "demo_trace_namespace": f"{project_id}_demo_core",
+        },
+        {
+            "demo_id": "omega",
+            "demo_title": "Omega",
+            "demo_title_lower": "omega",
+            "demo_purpose": "full-featured",
+            "demo_trace_namespace": f"{project_id}_demo_omega",
+        },
+    ]
 
     option_build_variants = ""
     include_install_export = ""
@@ -250,29 +266,34 @@ def initialize_repo_layout(
                 os.path.join(repo_root, "demo", "bootstrap", "cmake"),
                 os.path.join(repo_root, "demo", "bootstrap", "cmake", "tests"),
                 os.path.join(repo_root, "demo", "bootstrap", "src"),
-                os.path.join(repo_root, "demo", "libraries"),
-                os.path.join(repo_root, "demo", "libraries", "alpha"),
-                os.path.join(repo_root, "demo", "libraries", "alpha", "cmake"),
-                os.path.join(repo_root, "demo", "libraries", "alpha", "cmake", "tests"),
-                os.path.join(repo_root, "demo", "libraries", "alpha", "include"),
-                os.path.join(repo_root, "demo", "libraries", "alpha", "include", "alpha"),
-                os.path.join(repo_root, "demo", "libraries", "alpha", "src"),
-                os.path.join(repo_root, "demo", "libraries", "beta"),
-                os.path.join(repo_root, "demo", "libraries", "beta", "cmake"),
-                os.path.join(repo_root, "demo", "libraries", "beta", "cmake", "tests"),
-                os.path.join(repo_root, "demo", "libraries", "beta", "include"),
-                os.path.join(repo_root, "demo", "libraries", "beta", "include", "beta"),
-                os.path.join(repo_root, "demo", "libraries", "beta", "src"),
-                os.path.join(repo_root, "demo", "libraries", "gamma"),
-                os.path.join(repo_root, "demo", "libraries", "gamma", "cmake"),
-                os.path.join(repo_root, "demo", "libraries", "gamma", "cmake", "tests"),
-                os.path.join(repo_root, "demo", "libraries", "gamma", "include"),
-                os.path.join(repo_root, "demo", "libraries", "gamma", "include", "gamma"),
-                os.path.join(repo_root, "demo", "libraries", "gamma", "src"),
-                os.path.join(repo_root, "demo", "executable"),
-                os.path.join(repo_root, "demo", "executable", "cmake"),
-                os.path.join(repo_root, "demo", "executable", "cmake", "tests"),
-                os.path.join(repo_root, "demo", "executable", "src"),
+                os.path.join(repo_root, "demo", "sdk"),
+                os.path.join(repo_root, "demo", "sdk", "alpha"),
+                os.path.join(repo_root, "demo", "sdk", "alpha", "cmake"),
+                os.path.join(repo_root, "demo", "sdk", "alpha", "cmake", "tests"),
+                os.path.join(repo_root, "demo", "sdk", "alpha", "include"),
+                os.path.join(repo_root, "demo", "sdk", "alpha", "include", "alpha"),
+                os.path.join(repo_root, "demo", "sdk", "alpha", "src"),
+                os.path.join(repo_root, "demo", "sdk", "beta"),
+                os.path.join(repo_root, "demo", "sdk", "beta", "cmake"),
+                os.path.join(repo_root, "demo", "sdk", "beta", "cmake", "tests"),
+                os.path.join(repo_root, "demo", "sdk", "beta", "include"),
+                os.path.join(repo_root, "demo", "sdk", "beta", "include", "beta"),
+                os.path.join(repo_root, "demo", "sdk", "beta", "src"),
+                os.path.join(repo_root, "demo", "sdk", "gamma"),
+                os.path.join(repo_root, "demo", "sdk", "gamma", "cmake"),
+                os.path.join(repo_root, "demo", "sdk", "gamma", "cmake", "tests"),
+                os.path.join(repo_root, "demo", "sdk", "gamma", "include"),
+                os.path.join(repo_root, "demo", "sdk", "gamma", "include", "gamma"),
+                os.path.join(repo_root, "demo", "sdk", "gamma", "src"),
+                os.path.join(repo_root, "demo", "exe"),
+                os.path.join(repo_root, "demo", "exe", "core"),
+                os.path.join(repo_root, "demo", "exe", "core", "cmake"),
+                os.path.join(repo_root, "demo", "exe", "core", "cmake", "tests"),
+                os.path.join(repo_root, "demo", "exe", "core", "src"),
+                os.path.join(repo_root, "demo", "exe", "omega"),
+                os.path.join(repo_root, "demo", "exe", "omega", "cmake"),
+                os.path.join(repo_root, "demo", "exe", "omega", "cmake", "tests"),
+                os.path.join(repo_root, "demo", "exe", "omega", "src"),
                 os.path.join(repo_root, "include"),
                 os.path.join(repo_root, "include", project_id),
             ]
@@ -313,12 +334,12 @@ def initialize_repo_layout(
             "./kbuild.py --build-latest\n\n"
             "# Explicit demo-only run (uses build.demos when no args are provided).\n"
             "./kbuild.py --build-demos\n\n"
-            "./demo/executable/build/latest/test\n"
+            "./demo/exe/core/build/latest/test\n"
             "```\n\n"
             "Demos:\n"
             "- Bootstrap compile/link check: `demo/bootstrap/`\n"
-            "- Libraries: `demo/libraries/{alpha,beta,gamma}`\n"
-            "- Executable: `demo/executable/`\n\n"
+            "- SDKs: `demo/sdk/{alpha,beta,gamma}`\n"
+            "- Executables: `demo/exe/{core,omega}`\n\n"
             "Demo builds are orchestrated by the root `kbuild.py`.\n\n"
         )
     elif cmake_enabled:
@@ -377,13 +398,11 @@ def initialize_repo_layout(
     demo_bootstrap_cmake_content = ""
     demo_bootstrap_readme_content = ""
     demo_bootstrap_src_content = ""
-    demo_executable_cmake_content = ""
-    demo_executable_readme_content = ""
-    demo_executable_src_content = ""
     demo_bootstrap_tests_cmake_content = ""
     demo_executable_tests_cmake_content = ""
     demo_library_tests_cmake_content = ""
     demo_library_contents: list[dict[str, str]] = []
+    demo_executable_contents: list[dict[str, str]] = []
     if sdk_enabled:
         demo_bootstrap_cmake_content = render_template(
             templates_root,
@@ -408,30 +427,6 @@ def initialize_repo_layout(
                 "PROJECT_ID": project_id,
             },
         )
-        demo_executable_cmake_content = render_template(
-            templates_root,
-            "demo_executable_CMakeLists.txt.tpl",
-            {
-                "CMAKE_MINIMUM_VERSION": cmake_minimum_version,
-                "PROJECT_ID": project_id,
-                "SDK_PACKAGE_NAME": sdk_package_name,
-            },
-        )
-        demo_executable_readme_content = render_template(
-            templates_root,
-            "demo_executable_README.md.tpl",
-            {
-                "SDK_PACKAGE_NAME": sdk_package_name,
-            },
-        )
-        demo_executable_src_content = render_template(
-            templates_root,
-            "demo_executable_src_main.cpp.tpl",
-            {
-                "PROJECT_ID": project_id,
-                "PROJECT_ID_UPPER": project_id_upper,
-            },
-        )
         demo_bootstrap_tests_cmake_content = render_template(
             templates_root,
             "demo_bootstrap_cmake_tests_CMakeLists.txt.tpl",
@@ -447,6 +442,44 @@ def initialize_repo_layout(
             "demo_libraries_cmake_tests_CMakeLists.txt.tpl",
             {},
         )
+        for demo_spec in demo_executable_specs:
+            demo_executable_contents.append(
+                {
+                    "demo_id": demo_spec["demo_id"],
+                    "cmake": render_template(
+                        templates_root,
+                        "demo_executable_CMakeLists.txt.tpl",
+                        {
+                            "CMAKE_MINIMUM_VERSION": cmake_minimum_version,
+                            "PROJECT_ID": project_id,
+                            "SDK_PACKAGE_NAME": sdk_package_name,
+                            "DEMO_ID": demo_spec["demo_id"],
+                            "DEMO_TITLE": demo_spec["demo_title"],
+                            "DEMO_TITLE_LOWER": demo_spec["demo_title_lower"],
+                            "DEMO_TRACE_NAMESPACE": demo_spec["demo_trace_namespace"],
+                        },
+                    ),
+                    "readme": render_template(
+                        templates_root,
+                        "demo_executable_README.md.tpl",
+                        {
+                            "SDK_PACKAGE_NAME": sdk_package_name,
+                            "DEMO_TITLE": demo_spec["demo_title"],
+                            "DEMO_PURPOSE": demo_spec["demo_purpose"],
+                        },
+                    ),
+                    "source": render_template(
+                        templates_root,
+                        "demo_executable_src_main.cpp.tpl",
+                        {
+                            "PROJECT_ID": project_id,
+                            "PROJECT_ID_UPPER": project_id_upper,
+                            "DEMO_TITLE_LOWER": demo_spec["demo_title_lower"],
+                        },
+                    ),
+                    "tests": demo_executable_tests_cmake_content,
+                }
+            )
         for library_id in demo_library_ids:
             library_package_name = f"{library_id.capitalize()}SDK"
             demo_library_contents.append(
@@ -609,42 +642,48 @@ def initialize_repo_layout(
                     os.path.join(repo_root, "demo", "bootstrap", "cmake", "tests", "CMakeLists.txt"),
                     demo_bootstrap_tests_cmake_content,
                 ),
-                (
-                    os.path.join(repo_root, "demo", "executable", "CMakeLists.txt"),
-                    demo_executable_cmake_content,
-                ),
-                (
-                    os.path.join(repo_root, "demo", "executable", "README.md"),
-                    demo_executable_readme_content,
-                ),
-                (
-                    os.path.join(repo_root, "demo", "executable", "src", "main.cpp"),
-                    demo_executable_src_content,
-                ),
-                (
-                    os.path.join(repo_root, "demo", "executable", "cmake", "tests", "CMakeLists.txt"),
-                    demo_executable_tests_cmake_content,
-                ),
             ]
         )
+        for entry in demo_executable_contents:
+            demo_id = entry["demo_id"]
+            files_to_write.extend(
+                [
+                    (
+                        os.path.join(repo_root, "demo", "exe", demo_id, "CMakeLists.txt"),
+                        entry["cmake"],
+                    ),
+                    (
+                        os.path.join(repo_root, "demo", "exe", demo_id, "README.md"),
+                        entry["readme"],
+                    ),
+                    (
+                        os.path.join(repo_root, "demo", "exe", demo_id, "src", "main.cpp"),
+                        entry["source"],
+                    ),
+                    (
+                        os.path.join(repo_root, "demo", "exe", demo_id, "cmake", "tests", "CMakeLists.txt"),
+                        entry["tests"],
+                    ),
+                ]
+            )
         for entry in demo_library_contents:
             library_id = entry["library_id"]
             library_package_name = entry["library_package_name"]
             files_to_write.extend(
                 [
                     (
-                        os.path.join(repo_root, "demo", "libraries", library_id, "CMakeLists.txt"),
+                        os.path.join(repo_root, "demo", "sdk", library_id, "CMakeLists.txt"),
                         entry["cmake"],
                     ),
                     (
-                        os.path.join(repo_root, "demo", "libraries", library_id, "README.md"),
+                        os.path.join(repo_root, "demo", "sdk", library_id, "README.md"),
                         entry["readme"],
                     ),
                     (
                         os.path.join(
                             repo_root,
                             "demo",
-                            "libraries",
+                            "sdk",
                             library_id,
                             "cmake",
                             "tests",
@@ -656,7 +695,7 @@ def initialize_repo_layout(
                         os.path.join(
                             repo_root,
                             "demo",
-                            "libraries",
+                            "sdk",
                             library_id,
                             "cmake",
                             f"{library_package_name}Config.cmake.in",
@@ -667,7 +706,7 @@ def initialize_repo_layout(
                         os.path.join(
                             repo_root,
                             "demo",
-                            "libraries",
+                            "sdk",
                             library_id,
                             "include",
                             library_id,
@@ -676,7 +715,7 @@ def initialize_repo_layout(
                         entry["header"],
                     ),
                     (
-                        os.path.join(repo_root, "demo", "libraries", library_id, "src", "main.cpp"),
+                        os.path.join(repo_root, "demo", "sdk", library_id, "src", "main.cpp"),
                         entry["source"],
                     ),
                 ]

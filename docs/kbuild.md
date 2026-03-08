@@ -94,6 +94,16 @@ Example:
 ./kbuild.py --help
 ```
 
+### `--kbuild`
+
+Prints only the kbuild/bootstrap option group and exits with success. This is a root help command; it must be run by itself.
+
+Example:
+
+```bash
+./kbuild.py --kbuild
+```
+
 ### `--kbuild-root <dir>`
 
 Bootstraps the thin `kbuild.py` wrapper by validating a shared kbuild checkout and writing `./.kbuild.json` with `kbuild.root=<dir>`.
@@ -117,6 +127,16 @@ Example:
 
 ```bash
 ./kbuild.py --build-list
+```
+
+### `--clean`
+
+Prints only the clean option group and exits with success. This is a root help command; it must be run by itself.
+
+Example:
+
+```bash
+./kbuild.py --clean
 ```
 
 ### `--clean <name>`
@@ -159,7 +179,7 @@ Example:
 ./kbuild.py --build ci
 ```
 
-With no version argument, `--build` prints the build-specific option list.
+With no version argument, `--build` prints only the build option group and exits with success.
 
 ### `--build-latest`
 
@@ -178,7 +198,7 @@ Builds demos after core SDK build succeeds.
 Behavior:
 - If demo names are provided, those demos are built in the provided order.
 - If no demo names are provided, it uses `kbuild.json -> build.demos`.
-- Demo tokens are normalized so `executable` and `demo/executable` both resolve.
+- Demo tokens are normalized so `exe/core` and `demo/exe/core` both resolve.
 - Requires `cmake.sdk.package_name` to be present.
 - If `kbuild.json` has a `vcpkg` section, demos inherit the same vcpkg installed tree/triplet as the core build.
 - If `kbuild.json` does not have a `vcpkg` section, demos do not require or search for vcpkg.
@@ -189,8 +209,18 @@ Examples:
 
 ```bash
 ./kbuild.py --build-demos
-./kbuild.py --build-demos executable
-./kbuild.py --build-demos libraries/alpha libraries/beta executable
+./kbuild.py --build-demos exe/core
+./kbuild.py --build-demos sdk/alpha sdk/beta exe/core
+```
+
+### `--cmake`
+
+Prints only the CMake option group and exits with success. This is a root help command; it must be run by itself.
+
+Example:
+
+```bash
+./kbuild.py --cmake
 ```
 
 ### `--cmake-configure`
@@ -213,6 +243,28 @@ Example:
 ./kbuild.py --cmake-no-configure
 ```
 
+### `--cmake-jobs <n>`
+
+Overrides the parallel job count used for `cmake --build`. The value must be a positive integer.
+
+Example:
+
+```bash
+./kbuild.py --build-latest --cmake-jobs 8
+```
+
+### `--cmake-linkage <t>`
+
+Overrides the configured build linkage for the current run. Allowed values are `static`, `shared`, or `both`.
+
+This controls the generated `-D<PROJECT>_BUILD_STATIC` / `-D<PROJECT>_BUILD_SHARED` options used by the root build and demo builds.
+
+Example:
+
+```bash
+./kbuild.py --build-latest --cmake-linkage both
+```
+
 ### `--kbuild-config`
 
 Creates a starter `kbuild.json` template in the current directory. Run `./kbuild.py --kbuild-root <dir>` first so the wrapper can load the shared library. This only works when `kbuild.json` does not already exist, and it cannot be combined with other options. The starter template omits the optional `vcpkg` object; add it only when the repo actually uses vcpkg.
@@ -233,8 +285,8 @@ It creates directories and starter files such as:
 - `.gitignore`
 - `agent/BOOTSTRAP.md`
 - `demo/bootstrap/{CMakeLists.txt,README.md,src/main.cpp}` (SDK projects)
-- `demo/libraries/{alpha,beta,gamma}/...` (SDK projects)
-- `demo/executable/{CMakeLists.txt,README.md,src/main.cpp}` (SDK projects)
+- `demo/sdk/{alpha,beta,gamma}/...` (SDK projects)
+- `demo/exe/{core,omega}/{CMakeLists.txt,README.md,src/main.cpp}` (SDK projects)
 - `demo/*/cmake/tests/CMakeLists.txt` placeholders (SDK projects)
 - `cmake/tests/CMakeLists.txt` (when `cmake` is defined in `kbuild.json`)
 - `cmake/00_toolchain.cmake` (when `cmake` is defined in `kbuild.json`)
@@ -248,6 +300,16 @@ Example:
 
 ```bash
 ./kbuild.py --kbuild-init
+```
+
+### `--git`
+
+Prints only the git option group and exits with success. This is a root help command; it must be run by itself.
+
+Example:
+
+```bash
+./kbuild.py --git
 ```
 
 ### `--git-initialize`
@@ -275,11 +337,20 @@ Example:
 ./kbuild.py --git-sync "Update build docs"
 ```
 
+### `--vcpkg`
+
+Prints only the vcpkg option group and exits with success. This is a root help command; it must be run by itself.
+
+Example:
+
+```bash
+./kbuild.py --vcpkg
+```
+
 ### `--vcpkg-sync-baseline`
 
 Reads `./vcpkg/src` HEAD commit hash and writes it into:
 - `vcpkg/vcpkg.json` -> `configuration.default-registry.baseline`
-
 
 Example:
 
@@ -305,9 +376,12 @@ Example:
 
 `kbuild.py` enforces mode exclusivity:
 
+- `--kbuild`, `--cmake`, `--git`, and `--vcpkg` are root help commands and must be run alone.
 - `--kbuild-config` cannot be combined with any other option.
 - `--build-list` cannot be combined with other modes.
+- `--build` with no version prints only the build option group.
 - Clean options (`--clean <version>`, `--clean-latest`, `--clean-all`) cannot be combined with build, git, or kbuild init/config options.
+- `--clean` with no version prints only the clean option group.
 - `--kbuild-init` cannot be combined with build/list/clean/git flags.
 - `--git-initialize` cannot be combined with other modes.
 - `--git-sync` cannot be combined with other modes.
@@ -425,15 +499,15 @@ then `{version}` becomes `dev` in this example.
   },
   "build": {
     "demos": [
-      "libraries/alpha",
-      "libraries/beta",
-      "executable"
+      "sdk/alpha",
+      "sdk/beta",
+      "exe/core"
     ],
     "defaults": {
       "demos": [
-        "libraries/alpha",
-        "libraries/beta",
-        "executable"
+        "sdk/alpha",
+        "sdk/beta",
+        "exe/core"
       ]
     }
   }
@@ -562,7 +636,7 @@ This means demo order can intentionally represent dependency layering.
 Example:
 
 ```bash
-./kbuild.py --build-demos libraries/base libraries/ext executable
+./kbuild.py --build-demos sdk/base sdk/ext exe/core
 ```
 
 If `libraries/base` installs an SDK package and `libraries/ext` needs it, that order allows resolution in one pass.

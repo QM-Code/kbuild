@@ -13,7 +13,7 @@ option(KTOOLS_DEMO_BUILD_STATIC "Build demo static library target" ON)
 option(KTOOLS_DEMO_BUILD_SHARED "Build demo shared library target" ON)
 
 if(NOT KTOOLS_DEMO_BUILD_STATIC AND NOT KTOOLS_DEMO_BUILD_SHARED)
-    message(FATAL_ERROR "Demo library requires at least one of KTOOLS_DEMO_BUILD_STATIC or KTOOLS_DEMO_BUILD_SHARED to be ON.")
+    message(FATAL_ERROR "Demo SDK requires at least one of KTOOLS_DEMO_BUILD_STATIC or KTOOLS_DEMO_BUILD_SHARED to be ON.")
 endif()
 
 function(ktools_apply_runtime_rpath target_name)

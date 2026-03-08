@@ -16,30 +16,76 @@ from . import vcpkg_ops
 PROGRAM_NAME = "kbuild.py"
 
 
+def _print_option_lines(
+    option_lines: list[tuple[str, str]],
+    *,
+    file: object,
+    indent: str = "  ",
+) -> None:
+    width = 0
+    if option_lines:
+        width = max(len(option) for option, _ in option_lines)
+    for option, description in option_lines:
+        print(f"{indent}{option.ljust(width + 2)}{description}", file=file)
+
+
+KBUILD_OPTION_LINES = [
+    ("--kbuild-root <dir>", "validate a shared kbuild checkout and update ./.kbuild.json"),
+    ("--kbuild-config", "create a starter kbuild.json template"),
+    ("--kbuild-init", "scaffold this repo from ./kbuild.json"),
+]
+
+BUILD_OPTION_LINES = [
+    ("--build [version]", "build a version slot under build/"),
+    ("--build-latest", "build the latest slot"),
+    ("--build-demos [demo ...]", "build demos in order; with no args uses kbuild.json build.demos"),
+    ("--build-list", "list existing build version directories"),
+]
+
+CMAKE_OPTION_LINES = [
+    ("--cmake-configure", "force cmake configure step"),
+    ("--cmake-no-configure", "skip cmake configure step"),
+    ("--cmake-jobs <n>", "number of parallel jobs for cmake --build"),
+    ("--cmake-linkage <t>", "linkage: static|shared|both"),
+]
+
+GIT_OPTION_LINES = [
+    ("--git-initialize", "verify remote, initialize local git repo, commit, and push main"),
+    ("--git-sync <msg>", "git add . && git commit -m <msg> && git push"),
+]
+
+VCPKG_OPTION_LINES = [
+    ("--vcpkg-install", "clone/bootstrap local vcpkg under ./vcpkg, sync baseline, then build"),
+    ("--vcpkg-sync-baseline", "set baseline fields from ./vcpkg/src HEAD"),
+]
+
+CLEAN_OPTION_LINES = [
+    ("--clean [version]", "remove a specific build version"),
+    ("--clean-latest", "remove every build/latest/ directory"),
+    ("--clean-all", "remove every build version directory"),
+]
+
+
+def print_root_options(root_name: str, option_lines: list[tuple[str, str]], *, file: object) -> None:
+    print("", file=file)
+    print(f"Options for {root_name}:", file=file)
+    _print_option_lines(option_lines, file=file)
+    print("", file=file)
+
+
 def print_build_usage(*, file: object) -> None:
     print("Build options:", file=file)
-    print(
-        "  --build [version]       build a version slot under build/; with no version prints this section",
-        file=file,
-    )
-    print("  --build-latest          build the latest slot", file=file)
-    print(
-        "  --build-demos [demo ...]  build demos in order; with no args uses kbuild.json build.demos",
-        file=file,
-    )
-    print("  --build-type <t>        build type: static|shared|both", file=file)
-    print("  --build-jobs <n>        number of parallel jobs for cmake --build", file=file)
-    print("  --build-list            list existing build version directories", file=file)
+    _print_option_lines(BUILD_OPTION_LINES, file=file)
 
 
 def print_clean_usage(*, file: object) -> None:
     print("Clean options:", file=file)
-    print(
-        "  --clean [version]       remove a specific build version; with no version prints this section",
-        file=file,
-    )
-    print("  --clean-latest          remove every build/latest/ directory", file=file)
-    print("  --clean-all             remove every build version directory", file=file)
+    _print_option_lines(CLEAN_OPTION_LINES, file=file)
+
+
+def print_cmake_usage(*, file: object) -> None:
+    print("CMake options:", file=file)
+    _print_option_lines(CMAKE_OPTION_LINES, file=file)
 
 
 def usage(exit_code: int = 1) -> None:
@@ -47,48 +93,18 @@ def usage(exit_code: int = 1) -> None:
     print(f"Usage: {prog} <options>", file=sys.stderr)
     print("", file=sys.stderr)
     print("Initialization options:", file=sys.stderr)
-    print(
-        "  --kbuild-root <dir>     validate a shared kbuild checkout and update ./.kbuild.json",
-        file=sys.stderr,
-    )
-    print("  --kbuild-config         create a starter kbuild.json template", file=sys.stderr)
-    print("  --kbuild-init           scaffold this repo from ./kbuild.json", file=sys.stderr)
+    _print_option_lines(KBUILD_OPTION_LINES, file=sys.stderr)
     print("", file=sys.stderr)
     print_build_usage(file=sys.stderr)
     print("", file=sys.stderr)
-    print("CMake options:", file=sys.stderr)
-    print("  --cmake-configure       force cmake configure step", file=sys.stderr)
-    print("  --cmake-no-configure    skip cmake configure step", file=sys.stderr)
+    print_cmake_usage(file=sys.stderr)
     print("", file=sys.stderr)
     print("Git options:", file=sys.stderr)
-    print(
-        "  --git-initialize        verify remote, initialize local git repo, commit, and push main",
-        file=sys.stderr,
-    )
-    print("  --git-sync <msg>        git add . && git commit -m <msg> && git push", file=sys.stderr)
+    _print_option_lines(GIT_OPTION_LINES, file=sys.stderr)
     print("", file=sys.stderr)
     print("VCpkg options:", file=sys.stderr)
-    print(
-        "  --vcpkg-install         clone/bootstrap local vcpkg under ./vcpkg, sync baseline, then build",
-        file=sys.stderr,
-    )
-    print(
-        "  --vcpkg-sync-baseline   set baseline fields from ./vcpkg/src HEAD",
-        file=sys.stderr,
-    )
+    _print_option_lines(VCPKG_OPTION_LINES, file=sys.stderr)
     print("", file=sys.stderr)
-    print_clean_usage(file=sys.stderr)
-    raise SystemExit(exit_code)
-
-
-def usage_build(exit_code: int = 0) -> None:
-    print(f"Usage: {PROGRAM_NAME} --build [version] [build options]", file=sys.stderr)
-    print_build_usage(file=sys.stderr)
-    raise SystemExit(exit_code)
-
-
-def usage_clean(exit_code: int = 0) -> None:
-    print(f"Usage: {PROGRAM_NAME} --clean [version] [clean options]", file=sys.stderr)
     print_clean_usage(file=sys.stderr)
     raise SystemExit(exit_code)
 
@@ -156,8 +172,12 @@ def main(
     initialize_git = False
     git_sync_requested = False
     git_sync_message = ""
-    build_jobs_override: int | None = None
-    build_type_override: str | None = None
+    kbuild_help_requested = False
+    cmake_help_requested = False
+    git_help_requested = False
+    vcpkg_help_requested = False
+    cmake_jobs_override: int | None = None
+    cmake_linkage_override: str | None = None
     requested_demos: list[str] = []
 
     i = 0
@@ -165,10 +185,16 @@ def main(
         arg = args[i]
         if arg in ("-h", "--help"):
             usage(0)
+        elif arg == "--kbuild":
+            kbuild_help_requested = True
         elif arg == "--kbuild-config":
             create_config = True
+        elif arg == "--cmake":
+            cmake_help_requested = True
         elif arg == "--build-list":
             list_builds = True
+        elif arg == "--git":
+            git_help_requested = True
         elif arg == "--clean-latest":
             clean_latest = True
         elif arg == "--clean-all":
@@ -192,6 +218,8 @@ def main(
                 fail("--git-sync requires a non-empty commit message")
         elif arg == "--vcpkg-sync-baseline":
             sync_vcpkg_baseline_only = True
+        elif arg == "--vcpkg":
+            vcpkg_help_requested = True
         elif arg == "--build":
             build_requested = True
             if i + 1 < len(args) and not args[i + 1].startswith("-"):
@@ -202,27 +230,27 @@ def main(
             build_requested = True
             version = "latest"
             version_explicit = True
-        elif arg == "--build-jobs":
+        elif arg == "--cmake-jobs":
             build_requested = True
             i += 1
             if i >= len(args):
-                fail("missing value for '--build-jobs'")
+                fail("missing value for '--cmake-jobs'")
             try:
                 parsed_jobs = int(args[i].strip())
             except ValueError:
-                fail("--build-jobs requires a positive integer")
+                fail("--cmake-jobs requires a positive integer")
             if parsed_jobs < 1:
-                fail("--build-jobs requires a positive integer")
-            build_jobs_override = parsed_jobs
-        elif arg == "--build-type":
+                fail("--cmake-jobs requires a positive integer")
+            cmake_jobs_override = parsed_jobs
+        elif arg == "--cmake-linkage":
             build_requested = True
             i += 1
             if i >= len(args):
-                fail("missing value for '--build-type'")
+                fail("missing value for '--cmake-linkage'")
             parsed_build_type = args[i].strip().lower()
             if parsed_build_type not in config_ops.VALID_BUILD_TYPES:
-                fail("--build-type must be one of: static, shared, both")
-            build_type_override = parsed_build_type
+                fail("--cmake-linkage must be one of: static, shared, both")
+            cmake_linkage_override = parsed_build_type
         elif arg == "--build-demos":
             build_requested = True
             build_demos = True
@@ -251,23 +279,64 @@ def main(
     build_help_requested = build_requested and not (
         version_explicit
         or build_demos
-        or build_jobs_override is not None
-        or build_type_override is not None
+        or cmake_jobs_override is not None
+        or cmake_linkage_override is not None
         or configure_flag_seen
         or install_vcpkg
     )
     clean_help_requested = clean_requested and clean_version is None and not clean_latest and not clean_all
+    group_help_count = (
+        int(kbuild_help_requested)
+        + int(build_help_requested)
+        + int(cmake_help_requested)
+        + int(git_help_requested)
+        + int(vcpkg_help_requested)
+        + int(clean_help_requested)
+    )
 
+    if group_help_count > 1:
+        fail("use only one option root at a time: --kbuild, --build, --cmake, --git, --vcpkg, or --clean")
+    if kbuild_help_requested and len(args) != 1:
+        fail("--kbuild cannot be combined with other options")
+    if cmake_help_requested and len(args) != 1:
+        fail("--cmake cannot be combined with other options")
+    if git_help_requested and len(args) != 1:
+        fail("--git cannot be combined with other options")
+    if vcpkg_help_requested and len(args) != 1:
+        fail("--vcpkg cannot be combined with other options")
+
+    if kbuild_help_requested:
+        print_root_options("--kbuild", KBUILD_OPTION_LINES, file=sys.stdout)
+        raise SystemExit(0)
     if build_help_requested:
-        usage_build(0)
+        print_root_options("--build", BUILD_OPTION_LINES, file=sys.stdout)
+        raise SystemExit(0)
+    if cmake_help_requested:
+        print_root_options("--cmake", CMAKE_OPTION_LINES, file=sys.stdout)
+        raise SystemExit(0)
+    if git_help_requested:
+        print_root_options("--git", GIT_OPTION_LINES, file=sys.stdout)
+        raise SystemExit(0)
+    if vcpkg_help_requested:
+        print_root_options("--vcpkg", VCPKG_OPTION_LINES, file=sys.stdout)
+        raise SystemExit(0)
     if clean_help_requested:
-        usage_clean(0)
+        print_root_options("--clean", CLEAN_OPTION_LINES, file=sys.stdout)
+        raise SystemExit(0)
 
     clean_target_count = int(clean_version is not None) + int(clean_latest) + int(clean_all)
     if clean_target_count > 1:
         fail("use only one clean target: --clean <version>, --clean-latest, or --clean-all")
 
-    build_mode = build_requested or version_explicit or build_demos or build_jobs_override is not None or build_type_override is not None or configure_flag_seen or install_vcpkg
+    build_mode = (
+        build_requested
+        or version_explicit
+        or build_demos
+        or cmake_jobs_override is not None
+        or cmake_linkage_override is not None
+        or configure_flag_seen
+        or install_vcpkg
+    )
     clean_mode = clean_target_count > 0
 
     if create_config and (
@@ -369,8 +438,8 @@ def main(
         return 0
 
     sdk_dependencies = build_ops.resolve_sdk_dependencies(repo_root, version, config_sdk_dependencies)
-    build_jobs = config_build_jobs if build_jobs_override is None else build_jobs_override
-    build_type = config_build_type if build_type_override is None else build_type_override
+    build_jobs = config_build_jobs if cmake_jobs_override is None else cmake_jobs_override
+    build_type = config_build_type if cmake_linkage_override is None else cmake_linkage_override
     build_static = build_type in {"static", "both"}
     build_shared = build_type in {"shared", "both"}
     configure = configure_by_default if configure_override is None else configure_override

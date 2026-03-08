@@ -22,8 +22,9 @@ If you notice issues or have recommendations about the codebase, bring them to t
 ## Building with kbuild.py
 
 - Always use `kbuild.py` for builds. Do not use raw `cmake` commands for normal build flows.
-- Always run from the repo root: `./kbuild.py`
-- Make a test run of `./kbuild.py` to inspect the available options.
+- Always run from the repo root, invoking `./kbuild.py` from that directory.
+- Use `./kbuild.py --help` to inspect the available options.
+- `./kbuild.py` with no arguments also prints usage; it does not build.
 - `./kbuild.py --build-latest` builds the core SDK/app into `build/latest/` and then builds demos listed in `kbuild.json -> build.defaults.demos` (if defined).
 - Use `./kbuild.py --build-demos [demo ...]` for explicit demo builds.
 - With no demo names, `--build-demos` uses `kbuild.json -> build.demos`.

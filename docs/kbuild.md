@@ -180,6 +180,8 @@ Behavior:
 - If no demo names are provided, it uses `kbuild.json -> build.demos`.
 - Demo tokens are normalized so `executable` and `demo/executable` both resolve.
 - Requires `cmake.sdk.package_name` to be present.
+- If `kbuild.json` has a `vcpkg` section, demos inherit the same vcpkg installed tree/triplet as the core build.
+- If `kbuild.json` does not have a `vcpkg` section, demos do not require or search for vcpkg.
 
 The demo order is important because demo SDK prefixes from earlier entries can become available to later demo entries.
 
@@ -213,7 +215,7 @@ Example:
 
 ### `--kbuild-config`
 
-Creates a starter `kbuild.json` template in the current directory. Run `./kbuild.py --kbuild-root <dir>` first so the wrapper can load the shared library. This only works when `kbuild.json` does not already exist, and it cannot be combined with other options.
+Creates a starter `kbuild.json` template in the current directory. Run `./kbuild.py --kbuild-root <dir>` first so the wrapper can load the shared library. This only works when `kbuild.json` does not already exist, and it cannot be combined with other options. The starter template omits the optional `vcpkg` object; add it only when the repo actually uses vcpkg.
 
 Example:
 
@@ -239,7 +241,7 @@ It creates directories and starter files such as:
 - `cmake/10_dependencies.cmake` (when `cmake` is defined in `kbuild.json`)
 - `cmake/20_targets.cmake` (when `cmake` is defined in `kbuild.json`)
 - `src/<project_id>.cpp`
-- `vcpkg/vcpkg.json`
+- `vcpkg/vcpkg.json` (when `vcpkg` is defined in `kbuild.json`)
 - plus SDK-related files if `cmake.sdk.package_name` is defined
 
 Example:
@@ -529,7 +531,7 @@ If present, build flow expects repo-local vcpkg setup and injects toolchain inte
 
 ### `vcpkg.dependencies`
 
-Optional array of non-empty strings. Parsed/validated by `kbuild.py`, and also used by `--kbuild-init` to generate `vcpkg/vcpkg.json` dependencies.
+Optional array of non-empty strings. Parsed/validated by `kbuild.py`, and also used by `--kbuild-init` to generate `vcpkg/vcpkg.json` dependencies when the `vcpkg` object is present.
 
 Package install resolution happens later via CMake + manifest mode.
 
@@ -551,7 +553,7 @@ Optional array of non-empty strings. Used by `./kbuild.py --build-latest` (witho
 
 During demo builds, `kbuild.py` composes `CMAKE_PREFIX_PATH` in this order:
 - core SDK prefix: `build/<version>/sdk`
-- inferred vcpkg triplet prefix: `build/<version>/installed/<triplet>`
+- inherited vcpkg triplet prefix: `build/<version>/installed/<triplet>` (only when `kbuild.json` defines `vcpkg`)
 - each resolved dependency SDK prefix from `cmake.dependencies`
 - any already-built demo SDK prefix for demos earlier in the same order
 
@@ -574,6 +576,7 @@ When `vcpkg` config exists and build mode runs:
   - `VCPKG_ROOT` set to local checkout
   - `VCPKG_DOWNLOADS` set to repo-local cache unless already defined
   - `VCPKG_DEFAULT_BINARY_CACHE` set to repo-local cache unless already defined
+- demo builds inherit the same core-build `installed/<triplet>` prefix
 
 `--vcpkg-install` performs initial clone/bootstrap and baseline sync.
 
@@ -591,10 +594,13 @@ Files updated:
 
 Generated structure always includes:
 - `agent/`, `agent/projects/`
-- `cmake/`, `demo/`, `src/`, `tests/`, `vcpkg/`
+- `cmake/`, `demo/`, `src/`, `tests/`
 - root `CMakeLists.txt`, `README.md`, `.gitignore`
 - `agent/BOOTSTRAP.md`
 - `src/<project_id>.cpp`
+
+If `vcpkg` is defined in `kbuild.json`, it also generates:
+- `vcpkg/`
 - `vcpkg/vcpkg.json`
 
 If `cmake` is defined in `kbuild.json`, it also generates:
@@ -628,7 +634,7 @@ If `cmake.sdk.package_name` is defined, it also generates:
 - `VCPKG_ROOT` (set for build when vcpkg is enabled)
 - `VCPKG_DOWNLOADS` (set if not already present)
 - `VCPKG_DEFAULT_BINARY_CACHE` (set if not already present)
-- `VCPKG_INSTALLED_DIR` and `VCPKG_TARGET_TRIPLET` (fallback source for demo triplet inference)
+- `VCPKG_INSTALLED_DIR` and `VCPKG_TARGET_TRIPLET` (override source when resolving vcpkg-enabled build/demo context)
 - `GIT_TERMINAL_PROMPT=0` in non-interactive git/auth checks
 
 ## 13) Common Failure Cases and Fixes

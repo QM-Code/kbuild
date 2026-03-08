@@ -455,6 +455,14 @@ def main(
 
     print(f"Build complete -> dir={build_dir} | sdk={install_prefix}")
 
+    core_vcpkg_prefix: str | None = None
+    core_vcpkg_triplet = ""
+    if demo_order and has_vcpkg:
+        core_vcpkg_installed_dir, core_vcpkg_triplet = vcpkg_ops.resolve_build_vcpkg_context(
+            build_dir, repo_root
+        )
+        core_vcpkg_prefix = os.path.join(core_vcpkg_installed_dir, core_vcpkg_triplet)
+
     if demo_order:
         for demo_name in demo_order:
             demo_ops.build_demo(
@@ -470,6 +478,8 @@ def main(
                 build_shared=build_shared,
                 env=env,
                 demo_order=demo_order,
+                core_vcpkg_prefix=core_vcpkg_prefix,
+                core_vcpkg_triplet=core_vcpkg_triplet,
             )
 
     return 0

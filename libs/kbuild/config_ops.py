@@ -325,9 +325,6 @@ def create_kbuild_config_template(repo_root: str) -> int:
             },
             "dependencies": {},
         },
-        "vcpkg": {
-            "dependencies": [],
-        },
         "build": {
             "jobs": 4,
             "type": default_build_type_for_host(),

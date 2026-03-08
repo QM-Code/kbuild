@@ -4,7 +4,6 @@ import subprocess
 
 from . import build_ops
 from . import errors
-from . import vcpkg_ops
 
 
 def _run(cmd: list[str], *, env: dict[str, str] | None = None) -> None:
@@ -24,23 +23,22 @@ def build_demo(
     build_shared: bool,
     env: dict[str, str],
     demo_order: list[str],
+    core_vcpkg_prefix: str | None,
+    core_vcpkg_triplet: str,
 ) -> None:
     core_build_dir = os.path.join(repo_root, "build", version)
     core_sdk_prefix = os.path.join(core_build_dir, "sdk")
     build_ops.validate_sdk_prefix(core_sdk_prefix, cmake_package_name)
 
-    demo_vcpkg_installed_dir, demo_vcpkg_triplet = vcpkg_ops.resolve_demo_vcpkg_context(
-        core_sdk_prefix, repo_root
-    )
-    demo_vcpkg_prefix = os.path.join(demo_vcpkg_installed_dir, demo_vcpkg_triplet)
-    if not os.path.isdir(demo_vcpkg_prefix):
-        errors.die(f"missing vcpkg triplet prefix: {demo_vcpkg_prefix}")
-
     source_dir = build_ops.resolve_demo_source_dir(repo_root, demo_name)
     build_dir = os.path.join(repo_root, "demo", demo_name, "build", version)
     install_prefix = os.path.join(build_dir, "sdk")
 
-    prefix_entries: list[str] = [core_sdk_prefix, demo_vcpkg_prefix]
+    prefix_entries: list[str] = [core_sdk_prefix]
+    if core_vcpkg_prefix is not None:
+        if not os.path.isdir(core_vcpkg_prefix):
+            errors.die(f"missing vcpkg triplet prefix: {core_vcpkg_prefix}")
+        prefix_entries.append(core_vcpkg_prefix)
     for _, dependency_prefix in sdk_dependencies:
         if dependency_prefix not in prefix_entries:
             prefix_entries.append(dependency_prefix)
@@ -63,10 +61,10 @@ def build_demo(
         cmake_args.append(f"-DKTOOLS_RUNTIME_RPATH_DIRS={';'.join(runtime_rpath_dirs)}")
     for package_name, dependency_prefix in sdk_dependencies:
         cmake_args.append(f"-D{package_name}_DIR={build_ops.package_dir(dependency_prefix, package_name)}")
-    print(
-        f"Demo build -> dir={build_dir} | demo={demo_name} | sdk={core_sdk_prefix} | triplet={demo_vcpkg_triplet}",
-        flush=True,
-    )
+    message = f"Demo build -> dir={build_dir} | demo={demo_name} | sdk={core_sdk_prefix}"
+    if core_vcpkg_triplet:
+        message = f"{message} | triplet={core_vcpkg_triplet}"
+    print(message, flush=True)
 
     if not configure:
         cache_path = os.path.join(build_dir, "CMakeCache.txt")

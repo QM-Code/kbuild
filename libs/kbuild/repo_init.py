@@ -101,6 +101,7 @@ def load_initialize_repo_config(repo_root: str) -> dict[str, object]:
             cmake_dependency_packages.append(dependency_name)
 
     vcpkg_raw = raw.get("vcpkg")
+    has_vcpkg = vcpkg_raw is not None
     vcpkg_dependencies: list[str] = []
     if vcpkg_raw is not None:
         if not isinstance(vcpkg_raw, dict):
@@ -124,6 +125,7 @@ def load_initialize_repo_config(repo_root: str) -> dict[str, object]:
         "cmake_dependency_packages": cmake_dependency_packages,
         "sdk_enabled": sdk_enabled,
         "sdk_package_name": sdk_package_name,
+        "has_vcpkg": has_vcpkg,
         "vcpkg_dependencies": vcpkg_dependencies,
     }
 
@@ -209,6 +211,7 @@ def initialize_repo_layout(
     cmake_dependency_packages = list(config["cmake_dependency_packages"])
     sdk_enabled = bool(config["sdk_enabled"])
     sdk_package_name = str(config["sdk_package_name"])
+    has_vcpkg = bool(config["has_vcpkg"])
     vcpkg_dependencies = list(config["vcpkg_dependencies"])
     demo_library_ids = ["alpha", "beta", "gamma"]
 
@@ -235,8 +238,9 @@ def initialize_repo_layout(
         os.path.join(repo_root, "demo"),
         os.path.join(repo_root, "src"),
         os.path.join(repo_root, "tests"),
-        os.path.join(repo_root, "vcpkg"),
     ]
+    if has_vcpkg:
+        directory_order.append(os.path.join(repo_root, "vcpkg"))
     if cmake_enabled:
         directory_order.append(os.path.join(repo_root, "cmake", "tests"))
     if sdk_enabled:
@@ -511,21 +515,6 @@ def initialize_repo_layout(
         },
     )
 
-    if sdk_enabled:
-        vcpkg_json_payload: dict[str, object] = {
-            "name": project_id,
-            "dependencies": vcpkg_dependencies,
-        }
-    else:
-        vcpkg_json_payload = {
-            "dependencies": vcpkg_dependencies,
-        }
-    vcpkg_json_payload["configuration"] = {
-        "default-registry": {
-            "kind": "builtin",
-        }
-    }
-    vcpkg_json_content = f"{json.dumps(vcpkg_json_payload, indent=2)}\\n"
     gitignore_content = render_template(templates_root, "gitignore.tpl", {})
 
     files_to_write: list[tuple[str, str]] = [
@@ -534,8 +523,24 @@ def initialize_repo_layout(
         (os.path.join(repo_root, ".gitignore"), gitignore_content),
         (os.path.join(repo_root, "agent", "BOOTSTRAP.md"), bootstrap_content),
         (os.path.join(repo_root, "src", f"{project_id}.cpp"), src_cpp_content),
-        (os.path.join(repo_root, "vcpkg", "vcpkg.json"), vcpkg_json_content),
     ]
+    if has_vcpkg:
+        if sdk_enabled:
+            vcpkg_json_payload: dict[str, object] = {
+                "name": project_id,
+                "dependencies": vcpkg_dependencies,
+            }
+        else:
+            vcpkg_json_payload = {
+                "dependencies": vcpkg_dependencies,
+            }
+        vcpkg_json_payload["configuration"] = {
+            "default-registry": {
+                "kind": "builtin",
+            }
+        }
+        vcpkg_json_content = f"{json.dumps(vcpkg_json_payload, indent=2)}\\n"
+        files_to_write.append((os.path.join(repo_root, "vcpkg", "vcpkg.json"), vcpkg_json_content))
     if cmake_enabled:
         files_to_write.extend(
             [

@@ -147,25 +147,11 @@ def infer_triplet_from_installed_dir(installed_dir: str) -> str:
     return ""
 
 
-def resolve_demo_vcpkg_context(sdk_prefix: str, repo_root: str) -> tuple[str, str]:
-    candidate_build_dirs: list[str] = []
-    if os.path.basename(sdk_prefix.rstrip("/\\")) == "sdk":
-        candidate_build_dirs.append(os.path.abspath(os.path.dirname(sdk_prefix)))
-    candidate_build_dirs.append(os.path.abspath(os.path.join(sdk_prefix, os.pardir)))
-
-    unique_candidates: list[str] = []
-    seen: set[str] = set()
-    for candidate in candidate_build_dirs:
-        if candidate in seen:
-            continue
-        unique_candidates.append(candidate)
-        seen.add(candidate)
-
-    for build_candidate in unique_candidates:
-        installed_dir = os.path.join(build_candidate, "installed")
-        if not os.path.isdir(installed_dir):
-            continue
-        cache_path = os.path.join(build_candidate, "CMakeCache.txt")
+def resolve_build_vcpkg_context(build_dir: str, repo_root: str) -> tuple[str, str]:
+    build_dir_abs = _resolve_prefix(build_dir, repo_root)
+    installed_dir = os.path.join(build_dir_abs, "installed")
+    if os.path.isdir(installed_dir):
+        cache_path = os.path.join(build_dir_abs, "CMakeCache.txt")
         triplet = read_cache_value(cache_path, "VCPKG_TARGET_TRIPLET")
         if triplet and os.path.isdir(os.path.join(installed_dir, triplet)):
             return os.path.abspath(installed_dir), triplet
@@ -182,10 +168,9 @@ def resolve_demo_vcpkg_context(sdk_prefix: str, repo_root: str) -> tuple[str, st
             return env_installed_abs, env_triplet
 
     errors.die(
-        "could not infer vcpkg installed tree/triplet for demo build from SDK prefix.\n"
-        f"SDK prefix:\n  {sdk_prefix}\n"
+        "could not resolve vcpkg installed tree/triplet for a vcpkg-enabled build.\n"
+        f"Core build directory:\n  {build_dir_abs}\n"
         "Expected a core build layout like:\n"
-        "  build/<slot>/sdk\n"
         "  build/<slot>/installed/<triplet>\n"
         "You can also set VCPKG_INSTALLED_DIR and VCPKG_TARGET_TRIPLET explicitly."
     )

@@ -30,7 +30,7 @@ if({{PROJECT_ID_UPPER}}_BUILD_STATIC)
     )
 
     # Add link dependencies here when needed.
-    # target_link_libraries({{PROJECT_ID}}_sdk_static PUBLIC spdlog::spdlog)
+    # target_link_libraries({{PROJECT_ID}}_sdk_static PUBLIC some::dependency)
 
     set_target_properties({{PROJECT_ID}}_sdk_static PROPERTIES
         OUTPUT_NAME {{PROJECT_ID}}
@@ -49,7 +49,7 @@ if({{PROJECT_ID_UPPER}}_BUILD_SHARED)
     )
 
     # Add link dependencies here when needed.
-    # target_link_libraries({{PROJECT_ID}}_sdk_shared PUBLIC spdlog::spdlog)
+    # target_link_libraries({{PROJECT_ID}}_sdk_shared PUBLIC some::dependency)
 
     set_target_properties({{PROJECT_ID}}_sdk_shared PROPERTIES
         OUTPUT_NAME {{PROJECT_ID}}

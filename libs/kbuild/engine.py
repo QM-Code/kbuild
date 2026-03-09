@@ -90,6 +90,7 @@ def print_cmake_usage(*, file: object) -> None:
 
 def usage(exit_code: int = 1) -> None:
     prog = PROGRAM_NAME
+    print("", file=sys.stderr)
     print(f"Usage: {prog} <options>", file=sys.stderr)
     print("", file=sys.stderr)
     print("Initialization options:", file=sys.stderr)
@@ -106,6 +107,7 @@ def usage(exit_code: int = 1) -> None:
     _print_option_lines(VCPKG_OPTION_LINES, file=sys.stderr)
     print("", file=sys.stderr)
     print_clean_usage(file=sys.stderr)
+    print("", file=sys.stderr)
     raise SystemExit(exit_code)
 
 

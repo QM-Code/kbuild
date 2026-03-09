@@ -113,6 +113,7 @@ def load_kbuild_config(
     str,
     bool,
     bool,
+    bool,
     list[str],
     list[str],
     int,
@@ -153,6 +154,7 @@ def load_kbuild_config(
     cmake_minimum_version = "3.20"
     cmake_package_name = ""
     configure_by_default = True
+    build_testing = True
     sdk_dependencies: list[tuple[str, str]] = []
     cmake_raw = raw.get("cmake")
     if cmake_raw is not None:
@@ -160,7 +162,7 @@ def load_kbuild_config(
             errors.die("kbuild.json key 'cmake' must be an object")
         has_cmake = True
 
-        allowed_cmake = {"minimum_version", "configure_by_default", "sdk", "dependencies"}
+        allowed_cmake = {"minimum_version", "configure_by_default", "tests", "sdk", "dependencies"}
         for key in cmake_raw:
             if key not in allowed_cmake:
                 errors.die(f"unexpected key in kbuild.json 'cmake': '{key}'")
@@ -175,6 +177,11 @@ def load_kbuild_config(
         if not isinstance(configure_by_default_raw, bool):
             errors.die("kbuild.json key 'cmake.configure_by_default' must be a boolean")
         configure_by_default = configure_by_default_raw
+
+        build_testing_raw = cmake_raw.get("tests", True)
+        if not isinstance(build_testing_raw, bool):
+            errors.die("kbuild.json key 'cmake.tests' must be a boolean")
+        build_testing = build_testing_raw
 
         if "sdk" in cmake_raw:
             sdk_raw = cmake_raw.get("sdk")
@@ -288,6 +295,7 @@ def load_kbuild_config(
         cmake_package_name,
         configure_by_default,
         has_vcpkg,
+        build_testing,
         build_demos,
         default_build_demos,
         build_jobs,
@@ -320,6 +328,7 @@ def create_kbuild_config_template(repo_root: str) -> int:
         "cmake": {
             "minimum_version": "3.20",
             "configure_by_default": True,
+            "tests": True,
             "sdk": {
                 "package_name": "MyPackageNameSDK",
             },

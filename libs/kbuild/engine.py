@@ -417,6 +417,7 @@ def main(
         cmake_package_name,
         configure_by_default,
         has_vcpkg,
+        build_testing,
         config_build_demos,
         config_default_build_demos,
         config_build_jobs,
@@ -472,6 +473,7 @@ def main(
         "-DCMAKE_BUILD_TYPE=Release",
         f"-D{project_id_upper}_BUILD_STATIC={'ON' if build_static else 'OFF'}",
         f"-D{project_id_upper}_BUILD_SHARED={'ON' if build_shared else 'OFF'}",
+        f"-DBUILD_TESTING={'ON' if build_testing else 'OFF'}",
     ]
     if sdk_dependencies:
         prefix_entries = [dependency_prefix for _, dependency_prefix in sdk_dependencies]
@@ -547,6 +549,7 @@ def main(
                 build_jobs=build_jobs,
                 build_static=build_static,
                 build_shared=build_shared,
+                build_testing=build_testing,
                 env=env,
                 demo_order=demo_order,
                 core_vcpkg_prefix=core_vcpkg_prefix,

@@ -5,9 +5,16 @@
 Familiarize yourself with this project by reading:
 
 - README.md
+- Any AGENTS.md instructions, if present
 - CMakeLists.txt
 - src/*               Source tree
 - include/*           Public API (if present)
+
+If the task touches a subproject, demo, package, or example that has its own
+`README.md`, read that local `README.md` before making changes there.
+
+If the task crosses repo boundaries, read the top-level `README.md` in each
+target repo before editing.
 
 ## Projects
 

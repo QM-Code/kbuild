@@ -1,6 +1,14 @@
-# kbuild.py Master Usage Guide
+# Kbuild Full Reference
 
-This is a complete operator guide for `kbuild.py` as implemented in this repository today.
+This is the exhaustive operator guide for `kbuild.py` as implemented in this
+repository today.
+
+If you want the shorter docs set first, start with:
+
+- [Overview and quick start](index.md)
+- [Command guide](commands.md)
+- [Config guide](config.md)
+- [Common workflows](workflows.md)
 
 Use this guide as a one-stop reference for:
 - bootstrapping from an empty directory
@@ -55,7 +63,7 @@ For repos with local vcpkg not yet prepared:
    It validates `kbuild.json`, configures/builds core CMake targets into `build/<version>/`, installs SDK artifacts into `build/<version>/sdk`, and optionally builds demos in order.
 
 2. Repo operations.
-   It can generate a starter config, scaffold a new repo layout, initialize git against your configured remote, and run a simple add/commit/push sync.
+   It can generate a starter config, scaffold a new repo layout, initialize git against your configured remote, run a simple add/commit/push sync, and batch-forward commands into child repos.
 
 `kbuild.py` is strict by design. Unknown flags, unexpected JSON keys, and path-traversal-like values are hard errors.
 
@@ -64,7 +72,8 @@ For repos with local vcpkg not yet prepared:
 - Run `kbuild.py` from the same directory where the script is located.
 - Keep `kbuild.json` valid and schema-compliant; unknown keys are rejected.
 - Use simple version slot names (`latest`, `dev`, `ci`, `0.1`), not paths.
-- Treat `--git-sync` as a broad operation (`git add .`).
+- `--git-sync` only operates on a repo rooted at the current directory; it fails without local `./.git`.
+- `--batch` runs the remaining args inside child repos; with no inline repo list it uses `kbuild.json -> batch.repos`.
 
 ## 3) Build Output Layout
 
@@ -318,7 +327,8 @@ Initializes local git repository state and pushes `main` to configured remote.
 
 Behavior:
 - Verifies remote reachability (`git.url`) and auth push preflight (`git.auth`) non-interactively.
-- Fails if already inside a git worktree.
+- Fails if `./.git` already exists or if the current directory already owns a git worktree.
+- If the current directory sits inside a parent git worktree, initializes a new repo rooted at the current directory rather than adopting the parent.
 - Creates initial commit and pushes `main`.
 
 Example:
@@ -329,12 +339,35 @@ Example:
 
 ### `--git-sync <msg>`
 
-Runs a full sync sequence: `git add .`, `git commit -m <msg>`, `git push`. This is intentionally broad; it stages everything in the worktree.
+Runs a full sync sequence rooted at the current directory's own git repo: `git add -A`, check for staged changes, then `git commit -m <msg>` and `git push` only when needed.
+
+Safety checks:
+- Requires local git metadata at `./.git`.
+- Refuses to run if git resolves the worktree root to a parent directory.
+- If staging produces no changes, it prints `No changes to commit.` and exits successfully.
 
 Example:
 
 ```bash
 ./kbuild.py --git-sync "Update build docs"
+```
+
+### `--batch [repo ...]`
+
+Runs the remaining command-line args in each target repo, in order.
+
+Behavior:
+- With inline repo args, use those repo paths relative to the current repo root.
+- With no inline repo args, use `kbuild.json -> batch.repos`.
+- Validates every target repo up front and then stops on the first child command failure.
+- Forwards the remaining args exactly as written, minus the `--batch` clause itself.
+
+Examples:
+
+```bash
+./kbuild.py --batch --build dev
+./kbuild.py --batch kcli ktrace --build dev
+./kbuild.py --batch --git-sync "Sync child repos"
 ```
 
 ### `--vcpkg`
@@ -633,6 +666,12 @@ During demo builds, `kbuild.py` composes `CMAKE_PREFIX_PATH` in this order:
 
 This means demo order can intentionally represent dependency layering.
 
+Runtime path note:
+- `kbuild.py` may also derive local runtime library directories from those prefixes and pass them into generated CMake as `KTOOLS_RUNTIME_RPATH_DIRS`.
+- Generated projects use that list for `BUILD_RPATH` so shared-library demos and local SDK builds can run from build trees without extra loader setup.
+- Installed artifacts do not mirror those absolute local directories into `INSTALL_RPATH`.
+- Self-contained or relocatable packaging is a separate concern and is not implied by the default generated install layout.
+
 Example:
 
 ```bash
@@ -697,10 +736,13 @@ If `cmake.sdk.package_name` is defined, it also generates:
 - set/add `origin` to `git.auth`
 - create initial commit and push `-u origin main`
 
-`--git-sync <msg>` is intentionally simple and strong:
-- stages everything with `git add .`
-- commits with your message
-- pushes current branch to its upstream
+`--git-sync <msg>` is intentionally simple and strong, but only for the repo rooted at the current directory:
+- requires local `./.git`
+- refuses to use a parent/surrounding worktree
+- stages everything with `git add -A`
+- exits successfully without commit/push when staging produced no changes
+- otherwise commits with your message
+- then pushes current branch to its upstream
 
 ## 12) Environment Variables Used by kbuild
 

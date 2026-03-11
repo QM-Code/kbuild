@@ -1,0 +1,4 @@
+title: Kbuild Documentation
+description: Strict build and repo orchestration for ktools-style projects
+theme: minima
+markdown: kramdown

@@ -23,6 +23,49 @@ def _load_json_object(path: str) -> dict[str, object]:
     return payload
 
 
+def _canonical_path(path: str) -> str:
+    return os.path.normcase(os.path.realpath(path))
+
+
+def _git_worktree_root(repo_root: str) -> str | None:
+    result = subprocess.run(
+        ["git", "-C", repo_root, "rev-parse", "--show-toplevel"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        return None
+    top_level = result.stdout.strip()
+    if not top_level:
+        return None
+    return top_level
+
+
+def _require_current_root_git_worktree(repo_root: str, *, operation: str) -> str:
+    git_dir = os.path.join(repo_root, ".git")
+    if not os.path.exists(git_dir):
+        errors.die(
+            f"refusing to {operation} without local git metadata.\n"
+            "required:\n"
+            "  ./.git\n\n"
+            "Run `./kbuild.py --git-initialize` first."
+        )
+
+    top_level = _git_worktree_root(repo_root)
+    if top_level is None:
+        errors.die("git repository is not initialized. Run `./kbuild.py --git-initialize`.")
+
+    if _canonical_path(top_level) != _canonical_path(repo_root):
+        errors.die(
+            f"refusing to {operation} outside the current root.\n"
+            f"current root:\n  {repo_root}\n"
+            f"git worktree root:\n  {top_level}\n\n"
+            "Run this command from the actual git repo root, or initialize a repo rooted here first."
+        )
+    return top_level
+
+
 def load_git_urls(repo_root: str) -> tuple[str, str]:
     config_path = os.path.join(repo_root, "kbuild.json")
     raw = _load_json_object(config_path)
@@ -169,20 +212,15 @@ def verify_remote_repo_access(repo_url: str, auth_url: str) -> None:
 
 
 def initialize_git_repo(repo_root: str, repo_url: str, auth_url: str) -> int:
-    verify_remote_repo_access(repo_url, auth_url)
-
-    inside_worktree = subprocess.run(
-        ["git", "-C", repo_root, "rev-parse", "--is-inside-work-tree"],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    if inside_worktree.returncode == 0 and inside_worktree.stdout.strip().lower() == "true":
-        errors.die("current directory is already inside a git worktree.")
-
     git_dir = os.path.join(repo_root, ".git")
     if os.path.exists(git_dir):
         errors.die("'./.git' already exists.")
+
+    top_level = _git_worktree_root(repo_root)
+    if top_level is not None and _canonical_path(top_level) == _canonical_path(repo_root):
+        errors.die("current directory already has a git worktree rooted here.")
+
+    verify_remote_repo_access(repo_url, auth_url)
 
     _run(["git", "init", repo_root])
     _run(["git", "-C", repo_root, "branch", "-M", "main"])
@@ -242,18 +280,21 @@ def initialize_git_repo(repo_root: str, repo_url: str, auth_url: str) -> int:
 
 
 def git_sync(repo_root: str, commit_message: str) -> int:
-    worktree_check = subprocess.run(
-        ["git", "-C", repo_root, "rev-parse", "--is-inside-work-tree"],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    if worktree_check.returncode != 0 or worktree_check.stdout.strip().lower() != "true":
-        errors.die("git repository is not initialized. Run `./kbuild.py --git-initialize`.")
+    _require_current_root_git_worktree(repo_root, operation="sync git changes")
 
-    add_result = subprocess.run(["git", "-C", repo_root, "add", "."], check=False)
+    add_result = subprocess.run(["git", "-C", repo_root, "add", "-A"], check=False)
     if add_result.returncode != 0:
         errors.die("git add failed.")
+
+    staged_result = subprocess.run(
+        ["git", "-C", repo_root, "diff", "--cached", "--quiet"],
+        check=False,
+    )
+    if staged_result.returncode == 0:
+        print("No changes to commit.", flush=True)
+        return 0
+    if staged_result.returncode != 1:
+        errors.die("git diff --cached --quiet failed.")
 
     commit_result = subprocess.run(
         ["git", "-C", repo_root, "commit", "-m", commit_message],

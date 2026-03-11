@@ -8,6 +8,7 @@ from . import errors
 PRIMARY_KBUILD_CONFIG_FILENAME = "kbuild.json"
 LOCAL_KBUILD_CONFIG_FILENAME = ".kbuild.json"
 VALID_BUILD_TYPES = {"static", "shared", "both"}
+ALLOWED_TOP_LEVEL_KEYS = {"project", "git", "cmake", "vcpkg", "build", "kbuild", "batch"}
 
 
 def default_build_type_for_host() -> str:
@@ -122,9 +123,8 @@ def load_kbuild_config(
 ]:
     raw = load_effective_kbuild_payload(repo_root, require_shared=True, include_local_overlay=True)
 
-    allowed_top = {"project", "git", "cmake", "vcpkg", "build", "kbuild"}
     for key in raw:
-        if key not in allowed_top:
+        if key not in ALLOWED_TOP_LEVEL_KEYS:
             errors.die(f"unexpected key in kbuild.json: '{key}'")
 
     project_raw = raw.get("project")
@@ -302,6 +302,39 @@ def load_kbuild_config(
         build_type,
         sdk_dependencies,
     )
+
+
+def load_batch_repos(repo_root: str) -> list[str]:
+    raw = load_effective_kbuild_payload(repo_root, require_shared=True, include_local_overlay=True)
+
+    for key in raw:
+        if key not in ALLOWED_TOP_LEVEL_KEYS:
+            errors.die(f"unexpected key in kbuild.json: '{key}'")
+
+    batch_raw = raw.get("batch")
+    if batch_raw is None:
+        return []
+    if not isinstance(batch_raw, dict):
+        errors.die("kbuild.json key 'batch' must be an object")
+
+    allowed_batch = {"repos"}
+    for key in batch_raw:
+        if key not in allowed_batch:
+            errors.die(f"unexpected key in kbuild.json 'batch': '{key}'")
+
+    repos_raw = batch_raw.get("repos", [])
+    if not isinstance(repos_raw, list):
+        errors.die("kbuild.json key 'batch.repos' must be an array when defined")
+
+    repos: list[str] = []
+    for idx, item in enumerate(repos_raw):
+        if not isinstance(item, str) or not item.strip():
+            errors.die(f"kbuild.json key 'batch.repos[{idx}]' must be a non-empty string")
+        repo_token = item.strip()
+        if os.path.isabs(repo_token):
+            errors.die(f"kbuild.json key 'batch.repos[{idx}]' must be a relative path")
+        repos.append(repo_token)
+    return repos
 
 
 def _write_json_object(path: str, payload: dict[str, object]) -> None:

@@ -4,6 +4,7 @@ import os
 import subprocess
 import sys
 
+from . import batch_ops
 from . import build_ops
 from . import config_ops
 from . import demo_ops
@@ -35,6 +36,10 @@ KBUILD_OPTION_LINES = [
     ("--kbuild-init", "scaffold this repo from ./kbuild.json"),
 ]
 
+BATCH_OPTION_LINES = [
+    ("--batch [repo ...]", "run the remaining args in each listed repo; with no repos uses kbuild.json batch.repos"),
+]
+
 BUILD_OPTION_LINES = [
     ("--build [version]", "build a version slot under build/"),
     ("--build-latest", "build the latest slot"),
@@ -50,8 +55,8 @@ CMAKE_OPTION_LINES = [
 ]
 
 GIT_OPTION_LINES = [
-    ("--git-initialize", "verify remote, initialize local git repo, commit, and push main"),
-    ("--git-sync <msg>", "git add . && git commit -m <msg> && git push"),
+    ("--git-initialize", "verify remote, initialize a local ./.git repo here, commit, and push main"),
+    ("--git-sync <msg>", "sync the git repo rooted here only; fails without local ./.git"),
 ]
 
 VCPKG_OPTION_LINES = [
@@ -78,6 +83,11 @@ def print_build_usage(*, file: object) -> None:
     _print_option_lines(BUILD_OPTION_LINES, file=file)
 
 
+def print_batch_usage(*, file: object) -> None:
+    print("Batch options:", file=file)
+    _print_option_lines(BATCH_OPTION_LINES, file=file)
+
+
 def print_clean_usage(*, file: object) -> None:
     print("Clean options:", file=file)
     _print_option_lines(CLEAN_OPTION_LINES, file=file)
@@ -95,6 +105,8 @@ def usage(exit_code: int = 1) -> None:
     print("", file=sys.stderr)
     print("Initialization options:", file=sys.stderr)
     _print_option_lines(KBUILD_OPTION_LINES, file=sys.stderr)
+    print("", file=sys.stderr)
+    print_batch_usage(file=sys.stderr)
     print("", file=sys.stderr)
     print_build_usage(file=sys.stderr)
     print("", file=sys.stderr)
@@ -143,6 +155,33 @@ def enforce_script_directory() -> str:
     return repo_root
 
 
+def extract_batch_args(args: list[str]) -> tuple[bool, list[str], list[str]]:
+    batch_requested = False
+    batch_repo_tokens: list[str] = []
+    forwarded_args: list[str] = []
+
+    i = 0
+    while i < len(args):
+        arg = args[i]
+        if arg != "--batch":
+            forwarded_args.append(arg)
+            i += 1
+            continue
+
+        if batch_requested:
+            fail("--batch cannot be specified more than once")
+        batch_requested = True
+        i += 1
+        while i < len(args) and not args[i].startswith("-"):
+            repo_token = args[i].strip()
+            if not repo_token:
+                fail("batch repo paths must be non-empty")
+            batch_repo_tokens.append(repo_token)
+            i += 1
+
+    return batch_requested, batch_repo_tokens, forwarded_args
+
+
 def main(
     *,
     repo_root: str,
@@ -155,6 +194,10 @@ def main(
 
     if not args:
         usage(0)
+
+    batch_requested, batch_repo_tokens, forwarded_args = extract_batch_args(args)
+    if batch_requested:
+        return batch_ops.run_batch(repo_root, forwarded_args, batch_repo_tokens)
 
     version = "latest"
     version_explicit = False

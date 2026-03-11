@@ -27,7 +27,7 @@ def _default_project_id(repo_root: str) -> str:
 def load_initialize_repo_config(repo_root: str) -> dict[str, object]:
     raw = config_ops.load_shared_kbuild_payload(repo_root, require_shared=True)
 
-    allowed_top = {"project", "git", "cmake", "vcpkg", "build", "kbuild"}
+    allowed_top = {"project", "git", "cmake", "vcpkg", "build", "kbuild", "batch"}
     for key in raw:
         if key not in allowed_top:
             errors.die(f"unexpected key in config payload: '{key}'")

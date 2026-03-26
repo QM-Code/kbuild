@@ -83,23 +83,28 @@ def load_git_urls(repo_root: str) -> tuple[str, str]:
     return url_raw.strip(), auth_raw.strip()
 
 
-def verify_remote_repo_access(repo_url: str, auth_url: str) -> None:
+def verify_remote_repo_access(auth_url: str) -> None:
     env = os.environ.copy()
     env["GIT_TERMINAL_PROMPT"] = "0"
+    if auth_url.startswith("git@") or auth_url.startswith("ssh://"):
+        env["GIT_SSH_COMMAND"] = "ssh -o BatchMode=yes"
     result = subprocess.run(
-        ["git", "ls-remote", repo_url],
+        ["git", "ls-remote", auth_url],
         check=False,
         capture_output=True,
         text=True,
         env=env,
     )
     if result.returncode != 0:
+        detail = result.stderr.strip() or result.stdout.strip() or "git ls-remote failed"
         errors.die(
-            f"Could not reach\n  {repo_url}\n\n"
+            f"Could not access configured git remote\n  {auth_url}\n\n"
             "This is most likely due to one of the following reasons:\n"
-            "  (1) There is a typo in the git repo specified in kbuild.json (git.url).\n"
-            "  (2) You have not created the remote repo.\n"
-            "  (3) You do not have network access.\n"
+            "  (1) There is a typo in the git repo specified in kbuild.json (git.auth).\n"
+            "  (2) The remote repo does not exist.\n"
+            "  (3) Your git credentials for this remote are missing, expired, or invalid.\n"
+            "  (4) You do not have network access.\n\n"
+            f"Detail:\n  {detail}"
         )
 
     with tempfile.TemporaryDirectory(prefix="kbuild-auth-probe-") as probe_root:
@@ -211,7 +216,7 @@ def verify_remote_repo_access(repo_url: str, auth_url: str) -> None:
             )
 
 
-def initialize_git_repo(repo_root: str, repo_url: str, auth_url: str) -> int:
+def initialize_git_repo(repo_root: str, auth_url: str) -> int:
     git_dir = os.path.join(repo_root, ".git")
     if os.path.exists(git_dir):
         errors.die("'./.git' already exists.")
@@ -220,7 +225,7 @@ def initialize_git_repo(repo_root: str, repo_url: str, auth_url: str) -> int:
     if top_level is not None and _canonical_path(top_level) == _canonical_path(repo_root):
         errors.die("current directory already has a git worktree rooted here.")
 
-    verify_remote_repo_access(repo_url, auth_url)
+    verify_remote_repo_access(auth_url)
 
     _run(["git", "init", repo_root])
     _run(["git", "-C", repo_root, "branch", "-M", "main"])

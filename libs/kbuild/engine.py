@@ -440,8 +440,8 @@ def main(
     if create_config:
         return config_ops.create_kbuild_config_template(repo_root)
     if initialize_git:
-        git_url, git_auth = git_ops.load_git_urls(repo_root)
-        return git_ops.initialize_git_repo(repo_root, git_url, git_auth)
+        _, git_auth = git_ops.load_git_urls(repo_root)
+        return git_ops.initialize_git_repo(repo_root, git_auth)
     if git_sync_requested:
         return git_ops.git_sync(repo_root, git_sync_message)
     if list_builds:

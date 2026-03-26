@@ -98,7 +98,7 @@ Clean behavior is intentionally conservative:
 
 Important behavior:
 
-- `--git-initialize` verifies remote reachability and non-interactive auth,
+- `--git-initialize` verifies configured remote access and non-interactive auth,
   initializes `main`, creates the first commit, and pushes `origin/main`.
 - `--git-sync` only works when `./.git` exists and the current directory is the
   git worktree root.

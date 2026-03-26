@@ -326,7 +326,7 @@ Example:
 Initializes local git repository state and pushes `main` to configured remote.
 
 Behavior:
-- Verifies remote reachability (`git.url`) and auth push preflight (`git.auth`) non-interactively.
+- Verifies configured remote access and auth push preflight (`git.auth`) non-interactively.
 - Fails if `./.git` already exists or if the current directory already owns a git worktree.
 - If the current directory sits inside a parent git worktree, initializes a new repo rooted at the current directory rather than adopting the parent.
 - Creates initial commit and pushes `main`.
@@ -574,11 +574,11 @@ It is used for generated namespace, header/source names, and other scaffold defa
 
 ### `git.url`
 
-Required non-empty string. Used for remote reachability checks.
+Required non-empty string. Used as the canonical browser/display URL for the repository.
 
 ### `git.auth`
 
-Required non-empty string. Used for authenticated git operations (`origin` setup and push flows).
+Required non-empty string. Used for authenticated git operations and git preflight checks (`origin` setup, read probes, and push flows).
 
 ## `cmake` object
 
@@ -730,7 +730,7 @@ If `cmake.sdk.package_name` is defined, it also generates:
 ## 11) Git Operation Details
 
 `--git-initialize` does these checks/actions:
-- verifies remote is reachable (`git ls-remote <git.url>`)
+- verifies the configured auth remote is readable (`git ls-remote <git.auth>`)
 - performs auth preflight via dry-run push from temp repo to `git.auth`
 - `git init`, set branch `main`
 - set/add `origin` to `git.auth`

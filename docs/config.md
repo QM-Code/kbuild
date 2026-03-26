@@ -113,12 +113,12 @@ Unknown top-level keys are rejected.
 `git.url`
 
 - required non-empty string
-- used for remote reachability checks
+- used as the canonical browser/display URL for the repository
 
 `git.auth`
 
 - required non-empty string
-- used for authenticated remote operations such as `origin` setup and push
+- used for authenticated remote operations and git preflight checks
 
 ## CMake Settings
 

@@ -2,13 +2,45 @@ import json
 import os
 import re
 import sys
+from dataclasses import dataclass, field
 
 from . import errors
 
 PRIMARY_KBUILD_CONFIG_FILENAME = "kbuild.json"
 LOCAL_KBUILD_CONFIG_FILENAME = ".kbuild.json"
 VALID_BUILD_TYPES = {"static", "shared", "both"}
-ALLOWED_TOP_LEVEL_KEYS = {"project", "git", "cmake", "vcpkg", "build", "batch"}
+BACKEND_SECTION_KEYS = ("cmake", "cargo", "java", "swift", "kotlin", "csharp", "javascript")
+ALLOWED_TOP_LEVEL_KEYS = {"project", "git", *BACKEND_SECTION_KEYS, "vcpkg", "build", "batch"}
+
+
+@dataclass(frozen=True)
+class CargoDemoTarget:
+    demo_name: str
+    kind: str
+    target_name: str
+
+
+@dataclass(frozen=True)
+class KbuildConfig:
+    project_id: str
+    backend_name: str | None
+    has_vcpkg: bool
+    build_testing: bool
+    build_demos: list[str] = field(default_factory=list)
+    default_build_demos: list[str] = field(default_factory=list)
+    build_jobs: int = 4
+    build_type: str = "shared"
+    has_cmake: bool = False
+    cmake_minimum_version: str = "3.20"
+    cmake_package_name: str = ""
+    configure_by_default: bool = True
+    sdk_dependencies: list[tuple[str, str]] = field(default_factory=list)
+    has_cargo: bool = False
+    cargo_manifest: str = "src/Cargo.toml"
+    cargo_package: str = ""
+    cargo_build_tests: bool = True
+    cargo_sdk_include: list[str] = field(default_factory=list)
+    cargo_demo_targets: dict[str, CargoDemoTarget] = field(default_factory=dict)
 
 
 def default_build_type_for_host() -> str:
@@ -92,22 +124,97 @@ def load_effective_kbuild_payload(
     return merged
 
 
-def load_kbuild_config(
-    repo_root: str,
-) -> tuple[
-    str,
-    bool,
-    str,
-    str,
-    bool,
-    bool,
-    bool,
-    list[str],
-    list[str],
-    int,
-    str,
-    list[tuple[str, str]],
-]:
+def _parse_cargo_section(raw: dict[str, object]) -> tuple[bool, str, str, bool, list[str], dict[str, CargoDemoTarget]]:
+    has_cargo = False
+    cargo_manifest = "src/Cargo.toml"
+    cargo_package = ""
+    cargo_build_tests = True
+    cargo_sdk_include = ["Cargo.toml", "Cargo.lock", "README.md", "src", "tests"]
+    cargo_demo_targets: dict[str, CargoDemoTarget] = {}
+
+    cargo_raw = raw.get("cargo")
+    if cargo_raw is None:
+        return has_cargo, cargo_manifest, cargo_package, cargo_build_tests, cargo_sdk_include, cargo_demo_targets
+    if not isinstance(cargo_raw, dict):
+        errors.die("kbuild config key 'cargo' must be an object")
+
+    has_cargo = True
+    allowed_cargo = {"manifest", "package", "tests", "sdk", "demos"}
+    for key in cargo_raw:
+        if key not in allowed_cargo:
+            errors.die(f"unexpected key in kbuild config 'cargo': '{key}'")
+
+    if "manifest" in cargo_raw:
+        manifest_raw = cargo_raw.get("manifest")
+        if not isinstance(manifest_raw, str) or not manifest_raw.strip():
+            errors.die("kbuild config key 'cargo.manifest' must be a non-empty string")
+        cargo_manifest = manifest_raw.strip()
+
+    if "package" in cargo_raw:
+        package_raw = cargo_raw.get("package")
+        if not isinstance(package_raw, str) or not package_raw.strip():
+            errors.die("kbuild config key 'cargo.package' must be a non-empty string")
+        cargo_package = package_raw.strip()
+
+    cargo_build_tests_raw = cargo_raw.get("tests", True)
+    if not isinstance(cargo_build_tests_raw, bool):
+        errors.die("kbuild config key 'cargo.tests' must be a boolean")
+    cargo_build_tests = cargo_build_tests_raw
+
+    sdk_raw = cargo_raw.get("sdk", {})
+    if not isinstance(sdk_raw, dict):
+        errors.die("kbuild config key 'cargo.sdk' must be an object when defined")
+    allowed_cargo_sdk = {"include"}
+    for key in sdk_raw:
+        if key not in allowed_cargo_sdk:
+            errors.die(f"unexpected key in kbuild config 'cargo.sdk': '{key}'")
+    include_raw = sdk_raw.get("include", cargo_sdk_include)
+    if not isinstance(include_raw, list):
+        errors.die("kbuild config key 'cargo.sdk.include' must be an array when defined")
+    cargo_sdk_include = []
+    for idx, item in enumerate(include_raw):
+        if not isinstance(item, str) or not item.strip():
+            errors.die(f"kbuild config key 'cargo.sdk.include[{idx}]' must be a non-empty string")
+        cargo_sdk_include.append(item.strip())
+
+    demos_raw = cargo_raw.get("demos", {})
+    if not isinstance(demos_raw, dict):
+        errors.die("kbuild config key 'cargo.demos' must be an object when defined")
+    for demo_name_raw, demo_raw in demos_raw.items():
+        if not isinstance(demo_name_raw, str) or not demo_name_raw.strip():
+            errors.die("kbuild config key 'cargo.demos' has an invalid demo name")
+        demo_name = demo_name_raw.strip()
+        if not isinstance(demo_raw, dict):
+            errors.die(f"kbuild config key 'cargo.demos.{demo_name}' must be an object")
+
+        allowed_demo = {"bin", "example"}
+        for key in demo_raw:
+            if key not in allowed_demo:
+                errors.die(f"unexpected key in kbuild config 'cargo.demos.{demo_name}': '{key}'")
+
+        has_bin = "bin" in demo_raw
+        has_example = "example" in demo_raw
+        if has_bin == has_example:
+            errors.die(
+                f"kbuild config 'cargo.demos.{demo_name}' must define exactly one of 'bin' or 'example'"
+            )
+
+        target_key = "bin" if has_bin else "example"
+        target_name_raw = demo_raw.get(target_key)
+        if not isinstance(target_name_raw, str) or not target_name_raw.strip():
+            errors.die(
+                f"kbuild config key 'cargo.demos.{demo_name}.{target_key}' must be a non-empty string"
+            )
+        cargo_demo_targets[demo_name] = CargoDemoTarget(
+            demo_name=demo_name,
+            kind=target_key,
+            target_name=target_name_raw.strip(),
+        )
+
+    return has_cargo, cargo_manifest, cargo_package, cargo_build_tests, cargo_sdk_include, cargo_demo_targets
+
+
+def load_kbuild_config(repo_root: str) -> KbuildConfig:
     raw = load_effective_kbuild_payload(repo_root, require_local=True)
 
     for key in raw:
@@ -137,6 +244,21 @@ def load_kbuild_config(
     if not isinstance(git_auth_raw, str) or not git_auth_raw.strip():
         errors.die("kbuild config key 'git.auth' must be a non-empty string")
 
+    backend_name: str | None = None
+    backend_keys_found: list[str] = []
+    for backend_key in BACKEND_SECTION_KEYS:
+        backend_raw = raw.get(backend_key)
+        if backend_raw is None:
+            continue
+        if not isinstance(backend_raw, dict):
+            errors.die(f"kbuild config key '{backend_key}' must be an object")
+        backend_keys_found.append(backend_key)
+    if len(backend_keys_found) > 1:
+        formatted = ", ".join(backend_keys_found)
+        errors.die(f"kbuild config cannot define more than one backend section: {formatted}")
+    if backend_keys_found:
+        backend_name = backend_keys_found[0]
+
     has_cmake = False
     cmake_minimum_version = "3.20"
     cmake_package_name = ""
@@ -145,10 +267,7 @@ def load_kbuild_config(
     sdk_dependencies: list[tuple[str, str]] = []
     cmake_raw = raw.get("cmake")
     if cmake_raw is not None:
-        if not isinstance(cmake_raw, dict):
-            errors.die("kbuild config key 'cmake' must be an object")
         has_cmake = True
-
         allowed_cmake = {"minimum_version", "configure_by_default", "tests", "sdk", "dependencies"}
         for key in cmake_raw:
             if key not in allowed_cmake:
@@ -211,6 +330,15 @@ def load_kbuild_config(
                     f"kbuild config key 'cmake.dependencies.{dependency_name}.prefix' must be a non-empty string"
                 )
             sdk_dependencies.append((dependency_name, prefix_raw.strip()))
+
+    (
+        has_cargo,
+        cargo_manifest,
+        cargo_package,
+        cargo_build_tests,
+        cargo_sdk_include,
+        cargo_demo_targets,
+    ) = _parse_cargo_section(raw)
 
     has_vcpkg = False
     vcpkg_raw = raw.get("vcpkg")
@@ -275,19 +403,26 @@ def load_kbuild_config(
                 errors.die(f"kbuild config key 'build.defaults.demos[{idx}]' must be a non-empty string")
             default_build_demos.append(item.strip())
 
-    return (
-        project_id,
-        has_cmake,
-        cmake_minimum_version,
-        cmake_package_name,
-        configure_by_default,
-        has_vcpkg,
-        build_testing,
-        build_demos,
-        default_build_demos,
-        build_jobs,
-        build_type,
-        sdk_dependencies,
+    return KbuildConfig(
+        project_id=project_id,
+        backend_name=backend_name,
+        has_vcpkg=has_vcpkg,
+        build_testing=build_testing,
+        build_demos=build_demos,
+        default_build_demos=default_build_demos,
+        build_jobs=build_jobs,
+        build_type=build_type,
+        has_cmake=has_cmake,
+        cmake_minimum_version=cmake_minimum_version,
+        cmake_package_name=cmake_package_name,
+        configure_by_default=configure_by_default,
+        sdk_dependencies=sdk_dependencies,
+        has_cargo=has_cargo,
+        cargo_manifest=cargo_manifest,
+        cargo_package=cargo_package,
+        cargo_build_tests=cargo_build_tests,
+        cargo_sdk_include=cargo_sdk_include,
+        cargo_demo_targets=cargo_demo_targets,
     )
 
 

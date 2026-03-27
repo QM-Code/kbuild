@@ -1,7 +1,7 @@
 # Kbuild Documentation
 
 `kbuild` is a strict Python build and repo orchestration tool for ktools-style
-CMake projects. It handles five related jobs:
+projects. It handles five related jobs:
 
 - creating and validating repo-local kbuild config
 - building core targets into named build slots
@@ -14,6 +14,7 @@ CMake projects. It handles five related jobs:
 
 - [Command guide](commands.md)
 - [Config guide](config.md)
+- [Swift backend notes](swift_backend.md)
 - [Common workflows](workflows.md)
 - [Full operator reference](kbuild.md)
 
@@ -35,6 +36,17 @@ kbuild --build-latest
 kbuild --build-demos
 kbuild --clean-latest
 ```
+
+`kbuild` selects exactly one backend from the repo config. The shared tree
+currently supports:
+
+- `cmake`
+- `cargo`
+- `java`
+- `swift`
+- `kotlin`
+- `csharp`
+- `javascript`
 
 ## Core Concepts
 
@@ -72,9 +84,9 @@ kbuild --clean-latest
 
 - Use `kbuild --build-latest` for the normal build path.
 - Use `kbuild --build-demos` when you want explicit demo validation.
-- Use `kbuild --cmake-no-configure` only when the target build directory
+- Use `kbuild --cmake-no-configure` only for `cmake` repos when the target build directory
   already contains `CMakeCache.txt`.
-- Use `kbuild --vcpkg-install` the first time a repo-local `vcpkg` project is
+- Use `kbuild --vcpkg-install` only for `cmake` repos the first time a repo-local `vcpkg` project is
   prepared.
 - Use `kbuild --git-initialize` only once, after scaffold generation and remote
   creation.
@@ -83,7 +95,7 @@ kbuild --clean-latest
 
 If you want the code behind the behavior, start with:
 
-- [`kbuild.py`](../kbuild.py)
+- [`kbuild` entry script](../kbuild.py)
 - [`libs/kbuild/engine.py`](../libs/kbuild/engine.py)
 - [`libs/kbuild/config_ops.py`](../libs/kbuild/config_ops.py)
 - [`libs/kbuild/repo_init.py`](../libs/kbuild/repo_init.py)

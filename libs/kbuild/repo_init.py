@@ -27,10 +27,18 @@ def _default_project_id(repo_root: str) -> str:
 def load_initialize_repo_config(repo_root: str) -> dict[str, object]:
     raw = config_ops.load_effective_kbuild_payload(repo_root, require_local=True)
 
-    allowed_top = {"project", "git", "cmake", "vcpkg", "build", "batch"}
+    allowed_top = set(config_ops.ALLOWED_TOP_LEVEL_KEYS)
     for key in raw:
         if key not in allowed_top:
             errors.die(f"unexpected key in config payload: '{key}'")
+
+    non_cmake_backends = [key for key in config_ops.BACKEND_SECTION_KEYS if key != "cmake" and raw.get(key) is not None]
+    if non_cmake_backends:
+        backend_list = ", ".join(sorted(non_cmake_backends))
+        errors.die(
+            "kbuild --kbuild-init currently scaffolds only CMake-based repos.\n"
+            f"Configured non-CMake backend sections:\n  {backend_list}"
+        )
 
     project_raw = raw.get("project", {})
     if project_raw is None:

@@ -4,10 +4,10 @@ import os
 import subprocess
 import sys
 
+from . import backend_ops
 from . import batch_ops
 from . import build_ops
 from . import config_ops
-from . import demo_ops
 from . import errors
 from . import git_ops
 from . import repo_init
@@ -445,153 +445,38 @@ def main(
     if clean_version is not None:
         return build_ops.remove_build_dirs_for_slot(repo_root, clean_version)
 
-    (
-        project_id,
-        has_cmake,
-        cmake_minimum_version,
-        cmake_package_name,
-        configure_by_default,
-        has_vcpkg,
-        build_testing,
-        config_build_demos,
-        config_default_build_demos,
-        config_build_jobs,
-        config_build_type,
-        config_sdk_dependencies,
-    ) = config_ops.load_kbuild_config(repo_root)
+    config = config_ops.load_kbuild_config(repo_root)
 
     if sync_vcpkg_baseline_only:
-        if not has_vcpkg:
+        if not config.has_vcpkg:
             print("Nothing to do.")
             return 0
         vcpkg_ops.sync_vcpkg_baseline(repo_root)
         return 0
 
-    if install_vcpkg and has_vcpkg:
+    if install_vcpkg and config.has_vcpkg:
         vcpkg_ops.install_local_vcpkg(repo_root)
         vcpkg_ops.sync_vcpkg_baseline(repo_root)
 
-    if not has_cmake:
+    backend_result = backend_ops.run_backend(
+        repo_root=repo_root,
+        config=config,
+        version=version,
+        build_demos=build_demos,
+        requested_demos=requested_demos,
+        configure_override=configure_override,
+        configure_flag_seen=configure_flag_seen,
+        cmake_jobs_override=cmake_jobs_override,
+        cmake_linkage_override=cmake_linkage_override,
+        install_vcpkg=install_vcpkg,
+    )
+    if backend_result is not None:
+        return backend_result
+
+    if config.backend_name is None:
         print("Nothing to do.")
         return 0
-
-    sdk_dependencies = build_ops.resolve_sdk_dependencies(repo_root, version, config_sdk_dependencies)
-    build_jobs = config_build_jobs if cmake_jobs_override is None else cmake_jobs_override
-    build_type = config_build_type if cmake_linkage_override is None else cmake_linkage_override
-    build_static = build_type in {"static", "both"}
-    build_shared = build_type in {"shared", "both"}
-    configure = configure_by_default if configure_override is None else configure_override
-    demo_order: list[str] = []
-    if build_demos:
-        if requested_demos:
-            demo_order = [build_ops.normalize_demo_name(token) for token in requested_demos]
-        else:
-            if not config_build_demos:
-                fail("config must define 'build.demos' for --build-demos with no demo arguments")
-            demo_order = [build_ops.normalize_demo_name(token) for token in config_build_demos]
-    elif config_default_build_demos:
-        demo_order = [build_ops.normalize_demo_name(token) for token in config_default_build_demos]
-
-    if demo_order:
-        if not cmake_package_name:
-            fail(
-                "demo builds require SDK metadata; define cmake.sdk.package_name in config"
-            )
-        for demo_name in demo_order:
-            build_ops.resolve_demo_source_dir(repo_root, demo_name)
-
-    build_dir = os.path.join("build", version)
-
-    source_dir = repo_root
-    project_id_upper = project_id.upper()
-    cmake_args = [
-        "-DCMAKE_BUILD_TYPE=Release",
-        f"-D{project_id_upper}_BUILD_STATIC={'ON' if build_static else 'OFF'}",
-        f"-D{project_id_upper}_BUILD_SHARED={'ON' if build_shared else 'OFF'}",
-        f"-DBUILD_TESTING={'ON' if build_testing else 'OFF'}",
-    ]
-    if sdk_dependencies:
-        prefix_entries = [dependency_prefix for _, dependency_prefix in sdk_dependencies]
-        cmake_args.extend(
-            [
-                f"-DCMAKE_PREFIX_PATH={';'.join(prefix_entries)}",
-                "-DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON",
-            ]
-        )
-        for package_name, dependency_prefix in sdk_dependencies:
-            cmake_args.append(f"-D{package_name}_DIR={build_ops.package_dir(dependency_prefix, package_name)}")
-    runtime_rpath_dirs = build_ops.runtime_library_dirs([dependency_prefix for _, dependency_prefix in sdk_dependencies])
-    if runtime_rpath_dirs:
-        cmake_args.append(f"-DKTOOLS_RUNTIME_RPATH_DIRS={';'.join(runtime_rpath_dirs)}")
-
-    build_ops.validate_core_build_dir_layout(build_dir)
-
-    env = os.environ.copy()
-    if has_vcpkg:
-        local_vcpkg_root, local_toolchain, local_vcpkg_downloads, local_vcpkg_binary_cache = (
-            vcpkg_ops.ensure_local_vcpkg(repo_root)
-        )
-        env["VCPKG_ROOT"] = local_vcpkg_root
-        if not env.get("VCPKG_DOWNLOADS", "").strip():
-            env["VCPKG_DOWNLOADS"] = local_vcpkg_downloads
-        if not env.get("VCPKG_DEFAULT_BINARY_CACHE", "").strip():
-            env["VCPKG_DEFAULT_BINARY_CACHE"] = local_vcpkg_binary_cache
-        cmake_args.append(f"-DCMAKE_TOOLCHAIN_FILE={local_toolchain}")
-
-    if not configure:
-        cache_path = os.path.join(build_dir, "CMakeCache.txt")
-        if not os.path.isfile(cache_path):
-            fail("--cmake-no-configure requires an existing CMakeCache.txt in the build directory")
-    else:
-        os.makedirs(build_dir, exist_ok=True)
-        run(["cmake", "-S", source_dir, "-B", build_dir, *cmake_args], env=env)
-
-    run(["cmake", "--build", build_dir, f"-j{build_jobs}"], env=env)
-
-    install_prefix = os.path.abspath(os.path.join(build_dir, "sdk"))
-    build_ops.clean_sdk_install_prefix(install_prefix)
-    run(
-        [
-            "cmake",
-            "--install",
-            build_dir,
-            "--prefix",
-            install_prefix,
-        ],
-        env=env,
-    )
-
-    print(f"Build complete -> dir={build_dir} | sdk={install_prefix}")
-
-    core_vcpkg_prefix: str | None = None
-    core_vcpkg_triplet = ""
-    if demo_order and has_vcpkg:
-        core_vcpkg_installed_dir, core_vcpkg_triplet = vcpkg_ops.resolve_build_vcpkg_context(
-            build_dir, repo_root
-        )
-        core_vcpkg_prefix = os.path.join(core_vcpkg_installed_dir, core_vcpkg_triplet)
-
-    if demo_order:
-        for demo_name in demo_order:
-            demo_ops.build_demo(
-                repo_root=repo_root,
-                demo_name=demo_name,
-                version=version,
-                configure=configure,
-                cmake_minimum_version=cmake_minimum_version,
-                cmake_package_name=cmake_package_name,
-                sdk_dependencies=sdk_dependencies,
-                build_jobs=build_jobs,
-                build_static=build_static,
-                build_shared=build_shared,
-                build_testing=build_testing,
-                env=env,
-                demo_order=demo_order,
-                core_vcpkg_prefix=core_vcpkg_prefix,
-                core_vcpkg_triplet=core_vcpkg_triplet,
-            )
-
-    return 0
+    errors.die(f"internal error: backend '{config.backend_name}' was not dispatched")
 
 
 if __name__ == "__main__":

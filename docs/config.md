@@ -74,12 +74,19 @@ Representative full example:
 | --- | --- | --- |
 | `project` | yes | human title plus stable project identifier |
 | `git` | yes | remote URLs used by git helper modes |
-| `cmake` | no | build-system metadata and SDK export settings |
+| `cmake` | no | CMake build metadata and SDK export settings |
+| `cargo` | no | Rust/Cargo build metadata and demo mapping |
+| `java` | no | Java source/test/demo layout |
+| `swift` | no | Swift package path and demo product mapping |
+| `kotlin` | no | Kotlin source/test/demo layout and classpath dependencies |
+| `csharp` | no | C# source/test/demo layout and assembly settings |
+| `javascript` | no | JavaScript/Node source snapshot, tests, dependencies, and demo launchers |
 | `vcpkg` | no | repo-local `vcpkg` manifest dependencies |
 | `build` | no | job count, linkage defaults, and demo lists |
 | `batch` | no | relative child-repo list for `--batch` |
 
 Unknown top-level keys are rejected.
+Exactly one backend section may be defined in a repo config.
 
 ## Project Settings
 
@@ -106,8 +113,7 @@ Unknown top-level keys are rejected.
 
 ## CMake Settings
 
-If `cmake` is omitted, normal build mode validates config and returns
-`Nothing to do.`
+If `cmake` is selected as the repo backend, `kbuild` uses the CMake flow.
 
 `cmake.minimum_version`
 
@@ -138,6 +144,146 @@ prefix to contain:
 - `include/`
 - `lib/`
 - `lib/cmake/<Package>/<Package>Config.cmake`
+
+## Cargo Settings
+
+`cargo.manifest`
+
+- optional string, default `src/Cargo.toml`
+
+`cargo.package`
+
+- optional string forwarded as `--package`
+
+`cargo.tests`
+
+- optional boolean, default `true`
+
+`cargo.sdk.include`
+
+- optional array of paths copied into `build/<slot>/sdk/`
+
+`cargo.demos`
+
+- optional object keyed by demo name
+- each entry must define exactly one of:
+  - `bin`
+  - `example`
+
+## Java Settings
+
+`java.source_roots`
+
+- required non-empty array of Java source directories
+
+`java.test_roots`
+
+- optional array of Java test source directories
+
+`java.test_main_class`
+
+- optional main class used to generate `build/<slot>/tests/run-tests`
+
+`java.demo_root`
+
+- optional string, default `demo/java`
+
+## Swift Settings
+
+`swift.package_path`
+
+- required path to the Swift package root containing `Package.swift`
+
+`swift.demo_products`
+
+- optional object keyed by demo name
+- each demo maps to:
+  - `product`
+  - `kind` as `library` or `executable`
+
+## Kotlin Settings
+
+`kotlin.source_roots`
+
+- required non-empty array of Kotlin source directories
+
+`kotlin.test_roots`
+
+- optional array of Kotlin test source directories
+
+`kotlin.test_main_class`
+
+- optional main class used to generate `build/<slot>/tests/run-tests`
+
+`kotlin.demo_root`
+
+- optional string, default `demo`
+
+## JavaScript Settings
+
+`javascript.package`
+
+- required non-empty package name used for staged SDK metadata and
+  `KTOOLS_JS_SDK_ROOT_*` environment variables
+
+`javascript.sdk_dir`
+
+- required path copied into `build/<slot>/sdk/`
+- typically `src`
+
+`javascript.test_globs`
+
+- optional array of repo-relative test globs passed to `node --test`
+- when present, `kbuild` also writes `build/<slot>/tests/run-tests`
+
+`javascript.dependencies`
+
+- optional object keyed by dependency package name
+- each dependency currently supports only:
+  - `prefix`
+- `{version}` in the prefix is replaced with the active build slot
+- each resolved SDK must contain `src/<package>`
+
+`javascript.demos`
+
+- optional object keyed by demo name
+- each demo entry currently supports:
+  - `entry`
+  - `output`
+- `entry` is the repo-relative Node entry script
+- `output` is the generated launcher file name under `demo/<demo>/build/<slot>/`
+
+`kotlin.dependencies`
+
+- optional object keyed by dependency name
+- each dependency currently defines `classes`, a classes-directory path template
+
+## C# Settings
+
+`csharp.source_roots`
+
+- required non-empty array of C# source directories
+
+`csharp.test_roots`
+
+- optional array of C# test source directories
+
+`csharp.demo_root`
+
+- optional string, default `demo`
+
+`csharp.assembly_name`
+
+- optional assembly name override for generated projects
+
+`csharp.target_framework`
+
+- optional target framework string, default `net10.0`
+
+`csharp.dependencies`
+
+- optional object keyed by friendly dependency name
+- each value is a DLL path template
 
 ## Vcpkg Settings
 

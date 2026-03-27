@@ -25,9 +25,9 @@ def _default_project_id(repo_root: str) -> str:
 
 
 def load_initialize_repo_config(repo_root: str) -> dict[str, object]:
-    raw = config_ops.load_shared_kbuild_payload(repo_root, require_shared=True)
+    raw = config_ops.load_effective_kbuild_payload(repo_root, require_local=True)
 
-    allowed_top = {"project", "git", "cmake", "vcpkg", "build", "kbuild", "batch"}
+    allowed_top = {"project", "git", "cmake", "vcpkg", "build", "batch"}
     for key in raw:
         if key not in allowed_top:
             errors.die(f"unexpected key in config payload: '{key}'")
@@ -145,7 +145,7 @@ def ensure_directory_for_init(path: str) -> bool:
 
 
 def ensure_initialize_repo_root_empty(repo_root: str) -> None:
-    allowed_entries = {"kbuild.py", "kbuild.json", ".kbuild.json"}
+    allowed_entries = {"kbuild.json", ".kbuild.json"}
     unexpected_entries = sorted(entry for entry in os.listdir(repo_root) if entry not in allowed_entries)
     if not unexpected_entries:
         return
@@ -153,7 +153,7 @@ def ensure_initialize_repo_root_empty(repo_root: str) -> None:
     details = "\n".join(f"  {entry}" for entry in unexpected_entries)
     errors.die(
         "--kbuild-init must be run from an empty directory "
-        "(other than kbuild.py, kbuild.json, and .kbuild.json).\n"
+        "(other than kbuild.json and .kbuild.json).\n"
         "Found:\n"
         f"{details}"
     )
@@ -320,7 +320,7 @@ def initialize_repo_layout(
         readme_build_section = (
             "## Build SDK\n\n"
             "```bash\n"
-            "./kbuild.py --build-latest\n"
+            "kbuild --build-latest\n"
             "```\n\n"
             "SDK output:\n"
             "- `build/latest/sdk/include`\n"
@@ -330,23 +330,23 @@ def initialize_repo_layout(
         readme_demos_section = (
             "## Build and Test Demos\n\n"
             "```bash\n"
-            "# Builds SDK plus kbuild.json \"build.defaults.demos\".\n"
-            "./kbuild.py --build-latest\n\n"
+            "# Builds SDK plus config \"build.defaults.demos\".\n"
+            "kbuild --build-latest\n\n"
             "# Explicit demo-only run (uses build.demos when no args are provided).\n"
-            "./kbuild.py --build-demos\n\n"
+            "kbuild --build-demos\n\n"
             "./demo/exe/core/build/latest/test\n"
             "```\n\n"
             "Demos:\n"
             "- Bootstrap compile/link check: `demo/bootstrap/`\n"
             "- SDKs: `demo/sdk/{alpha,beta,gamma}`\n"
             "- Executables: `demo/exe/{core,omega}`\n\n"
-            "Demo builds are orchestrated by the root `kbuild.py`.\n\n"
+            "Demo builds are orchestrated by the root `kbuild` command.\n\n"
         )
     elif cmake_enabled:
         readme_build_section = (
             "## Build\n\n"
             "```bash\n"
-            "./kbuild.py --build-latest\n"
+            "kbuild --build-latest\n"
             "```\n\n"
             "Build output:\n"
             "- `build/latest/`\n\n"
@@ -355,7 +355,7 @@ def initialize_repo_layout(
         readme_build_section = (
             "## Build\n\n"
             "This scaffold does not define a CMake project yet.\n"
-            "Add `cmake` settings to `kbuild.json` before running `./kbuild.py --build-latest`.\n\n"
+            "Add `cmake` settings to your kbuild config before running `kbuild --build-latest`.\n\n"
         )
 
     readme_content = render_template(

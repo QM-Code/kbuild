@@ -3,12 +3,12 @@
 `kbuild` is a strict Python build and repo orchestration tool for ktools-style
 CMake projects. It handles five related jobs:
 
-- bootstrapping a thin `kbuild.py` wrapper against a shared `kbuild` checkout
-- validating and loading `kbuild.json`
+- creating and validating repo-local kbuild config
 - building core targets into named build slots
 - building ordered demo trees against the core SDK and dependency SDKs
 - scaffolding and helper operations such as repo initialization, git setup, and
   repo-local `vcpkg`
+- batch-forwarding commands into child repos
 
 ## Start Here
 
@@ -22,36 +22,34 @@ CMake projects. It handles five related jobs:
 Fresh directory:
 
 ```bash
-./kbuild.py --kbuild-root /path/to/kbuild
-./kbuild.py --kbuild-config
-# edit kbuild.json
-./kbuild.py --kbuild-init
-./kbuild.py --vcpkg-install
+kbuild --kbuild-config
+# edit .kbuild.json
+kbuild --kbuild-init
+kbuild --vcpkg-install
 ```
 
 Existing repo:
 
 ```bash
-./kbuild.py --build-latest
-./kbuild.py --build-demos
-./kbuild.py --clean-latest
+kbuild --build-latest
+kbuild --build-demos
+kbuild --clean-latest
 ```
 
 ## Core Concepts
 
-`Shared root`
+`Repo root`
 
-- The copied wrapper `kbuild.py` loads the implementation from a shared
-  checkout recorded in `./.kbuild.json -> kbuild.root`.
+- `kbuild` only runs from a directory containing `./.kbuild.json`.
 
-`Shared config`
+`Primary config`
 
-- `kbuild.json` is the committed project config. Unknown keys are rejected.
+- `./.kbuild.json` is the required repo marker and primary config file.
 
-`Local overlay`
+`Optional shared base`
 
-- `./.kbuild.json` is primarily used for `kbuild.root` and may also overlay
-  local config values for the current machine.
+- `./kbuild.json` is optional. When present, `kbuild` deep-merges
+  `./.kbuild.json` on top of it.
 
 `Build slots`
 
@@ -67,19 +65,19 @@ Existing repo:
 
 `Repo-local vcpkg`
 
-- When `kbuild.json` defines `vcpkg`, `kbuild` expects a repo-local checkout
-  under `./vcpkg/src` and integrates it through CMake manifest mode.
+- When the effective config defines `vcpkg`, `kbuild` expects a repo-local
+  checkout under `./vcpkg/src` and integrates it through CMake manifest mode.
 
 ## Which Command Should I Reach For?
 
-- Use `./kbuild.py --build-latest` for the normal build path.
-- Use `./kbuild.py --build-demos` when you want explicit demo validation.
-- Use `./kbuild.py --cmake-no-configure` only when the target build directory
+- Use `kbuild --build-latest` for the normal build path.
+- Use `kbuild --build-demos` when you want explicit demo validation.
+- Use `kbuild --cmake-no-configure` only when the target build directory
   already contains `CMakeCache.txt`.
-- Use `./kbuild.py --vcpkg-install` the first time a repo-local `vcpkg` project
-  is prepared.
-- Use `./kbuild.py --git-initialize` only once, after scaffold generation and
-  remote creation.
+- Use `kbuild --vcpkg-install` the first time a repo-local `vcpkg` project is
+  prepared.
+- Use `kbuild --git-initialize` only once, after scaffold generation and remote
+  creation.
 
 ## Working References
 

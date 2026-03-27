@@ -205,7 +205,7 @@ def validate_sdk_prefix(prefix: str, cmake_package_name: str) -> None:
     errors.die(
         "SDK prefix is missing package config.\n"
         f"Expected:\n  {config_path}\n"
-        "Build/install SDK from a core build first (for example: ./kbuild.py --build test)."
+        "Build/install SDK from a core build first (for example: kbuild --build test)."
     )
 
 

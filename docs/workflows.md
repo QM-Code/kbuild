@@ -4,27 +4,24 @@ This page collects the normal operating sequences for `kbuild`.
 
 ## Empty Directory To Scaffolded Repo
 
-1. Copy `kbuild.py` into the empty directory.
-2. Point the wrapper at the shared `kbuild` checkout.
-3. Create `kbuild.json`.
-4. Edit the config.
-5. Scaffold the repo.
-6. Initialize git if needed.
-7. Install local `vcpkg` if the repo uses it.
+1. Create starter config in the empty directory.
+2. Edit the config.
+3. Scaffold the repo.
+4. Initialize git if needed.
+5. Install local `vcpkg` if the repo uses it.
 
 ```bash
-./kbuild.py --kbuild-root /path/to/kbuild
-./kbuild.py --kbuild-config
-# edit ./kbuild.json
-./kbuild.py --kbuild-init
-./kbuild.py --git-initialize
-./kbuild.py --vcpkg-install
+kbuild --kbuild-config
+# edit ./.kbuild.json
+kbuild --kbuild-init
+kbuild --git-initialize
+kbuild --vcpkg-install
 ```
 
 Notes:
 
 - `--kbuild-init` requires the directory to be otherwise empty except for
-  `kbuild.py`, `kbuild.json`, and `.kbuild.json`.
+  `kbuild.json` and `.kbuild.json`.
 - scaffolded SDK repos include core CMake files, demo trees, test placeholders,
   and optional `vcpkg/vcpkg.json`.
 
@@ -33,21 +30,21 @@ Notes:
 Normal build:
 
 ```bash
-./kbuild.py --build-latest
+kbuild --build-latest
 ```
 
 Fast rebuild from an existing cache:
 
 ```bash
-./kbuild.py --build-latest --cmake-no-configure
-./kbuild.py --build-demos --cmake-no-configure
+kbuild --build-latest --cmake-no-configure
+kbuild --build-demos --cmake-no-configure
 ```
 
 Fresh rebuild:
 
 ```bash
-./kbuild.py --clean-latest
-./kbuild.py --build-latest
+kbuild --clean-latest
+kbuild --build-latest
 ```
 
 ## Explicit Demo Validation
@@ -55,13 +52,13 @@ Fresh rebuild:
 Build demos from config order:
 
 ```bash
-./kbuild.py --build-demos
+kbuild --build-demos
 ```
 
 Build an explicit chain:
 
 ```bash
-./kbuild.py --build dev --build-demos sdk/alpha sdk/beta exe/core
+kbuild --build dev --build-demos sdk/alpha sdk/beta exe/core
 ```
 
 Why order matters:
@@ -79,17 +76,18 @@ Example:
 
 ```bash
 cd ../kcli
-./kbuild.py --build dev
+kbuild --build dev
 
 cd ../ktrace
-./kbuild.py --build dev --vcpkg-install
+kbuild --build dev --vcpkg-install
 
 cd ../myproject
-./kbuild.py --build dev --vcpkg-install
-./kbuild.py --build dev --build-demos
+kbuild --build dev --vcpkg-install
+kbuild --build dev --build-demos
 ```
 
-This works cleanly when `cmake.dependencies` uses version-aware prefixes such as:
+This works cleanly when `cmake.dependencies` uses version-aware prefixes such
+as:
 
 ```json
 "dependencies": {
@@ -107,24 +105,24 @@ This works cleanly when `cmake.dependencies` uses version-aware prefixes such as
 After scaffold generation and remote creation:
 
 ```bash
-./kbuild.py --git-initialize
+kbuild --git-initialize
 ```
 
 For later full syncs:
 
 ```bash
-./kbuild.py --git-sync "Update project docs"
+kbuild --git-sync "Update project docs"
 ```
 
-`kbuild` refuses to use a parent git worktree for sync operations. The repo must
-be rooted at the current directory.
+`kbuild` refuses to use a parent git worktree for sync operations. The repo
+must be rooted at the current directory.
 
 ## Vcpkg Bring-Up
 
 For repos that define a `vcpkg` object:
 
 ```bash
-./kbuild.py --vcpkg-install
+kbuild --vcpkg-install
 ```
 
 This prepares:
@@ -137,7 +135,7 @@ If you only need to update the manifest baseline from the checked-out vcpkg
 commit:
 
 ```bash
-./kbuild.py --vcpkg-sync-baseline
+kbuild --vcpkg-sync-baseline
 ```
 
 ## When To Stop And Reconfigure
@@ -153,7 +151,7 @@ Run a configure pass again when:
 Use:
 
 ```bash
-./kbuild.py --build-latest --cmake-configure
+kbuild --build-latest --cmake-configure
 ```
 
 For the exhaustive command semantics and failure cases, see

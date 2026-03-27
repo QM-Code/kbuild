@@ -14,7 +14,7 @@ from . import repo_init
 from . import vcpkg_ops
 
 
-PROGRAM_NAME = "kbuild.py"
+PROGRAM_NAME = "kbuild"
 
 
 def _print_option_lines(
@@ -31,19 +31,18 @@ def _print_option_lines(
 
 
 KBUILD_OPTION_LINES = [
-    ("--kbuild-root <dir>", "validate a shared kbuild checkout and update ./.kbuild.json"),
-    ("--kbuild-config", "create a starter kbuild.json template"),
-    ("--kbuild-init", "scaffold this repo from ./kbuild.json"),
+    ("--kbuild-config", "create a starter ./.kbuild.json template"),
+    ("--kbuild-init", "scaffold this repo from the effective kbuild config"),
 ]
 
 BATCH_OPTION_LINES = [
-    ("--batch [repo ...]", "run the remaining args in each listed repo; with no repos uses kbuild.json batch.repos"),
+    ("--batch [repo ...]", "run the remaining args in each listed repo; with no repos uses config batch.repos"),
 ]
 
 BUILD_OPTION_LINES = [
     ("--build [version]", "build a version slot under build/"),
     ("--build-latest", "build the latest slot"),
-    ("--build-demos [demo ...]", "build demos in order; with no args uses kbuild.json build.demos"),
+    ("--build-demos [demo ...]", "build demos in order; with no args uses config build.demos"),
     ("--build-list", "list existing build version directories"),
 ]
 
@@ -127,32 +126,19 @@ def fail(message: str) -> None:
     errors.die_with_usage(message, usage, code=1)
 
 
-def ensure_shared_config_exists(repo_root: str) -> None:
-    config_path = os.path.join(repo_root, config_ops.PRIMARY_KBUILD_CONFIG_FILENAME)
+def ensure_local_config_exists(repo_root: str) -> None:
+    config_path = os.path.join(repo_root, config_ops.LOCAL_KBUILD_CONFIG_FILENAME)
     if os.path.isfile(config_path):
         return
     errors.die(
-        "missing required config file './kbuild.json'.\n"
-        "Run './kbuild.py --kbuild-config' first.",
+        "missing required config file './.kbuild.json'.\n"
+        "Run 'kbuild --kbuild-config' first.",
         code=1,
     )
 
 
 def run(cmd: list[str], *, env: dict[str, str] | None = None) -> None:
     subprocess.run(cmd, check=True, env=env)
-
-
-def enforce_script_directory() -> str:
-    repo_root = os.path.abspath(os.path.dirname(__file__))
-    cwd = os.path.abspath(os.getcwd())
-    repo_root_cmp = os.path.normcase(os.path.realpath(repo_root))
-    cwd_cmp = os.path.normcase(os.path.realpath(cwd))
-    if cwd_cmp != repo_root_cmp:
-        errors.die(
-            "kbuild.py must be run from the directory it is in.\n"
-            "Run `./kbuild.py` from that directory."
-        )
-    return repo_root
 
 
 def extract_batch_args(args: list[str]) -> tuple[bool, list[str], list[str]]:
@@ -187,7 +173,7 @@ def main(
     repo_root: str,
     args: list[str],
     templates_root: str,
-    program_name: str = "kbuild.py",
+    program_name: str = "kbuild",
 ) -> int:
     global PROGRAM_NAME
     PROGRAM_NAME = program_name
@@ -197,7 +183,13 @@ def main(
 
     batch_requested, batch_repo_tokens, forwarded_args = extract_batch_args(args)
     if batch_requested:
-        return batch_ops.run_batch(repo_root, forwarded_args, batch_repo_tokens)
+        entrypoint_path = os.path.join(os.path.dirname(templates_root), "kbuild.py")
+        return batch_ops.run_batch(
+            repo_root,
+            forwarded_args,
+            batch_repo_tokens,
+            entrypoint_path=entrypoint_path,
+        )
 
     version = "latest"
     version_explicit = False
@@ -433,7 +425,7 @@ def main(
         fail("--vcpkg-sync-baseline cannot be combined with other options")
 
     if not create_config:
-        ensure_shared_config_exists(repo_root)
+        ensure_local_config_exists(repo_root)
 
     if initialize_repo:
         return repo_init.initialize_repo_layout(repo_root, templates_root)
@@ -603,12 +595,12 @@ def main(
 
 
 if __name__ == "__main__":
-    repo = enforce_script_directory()
+    repo = os.path.abspath(os.getcwd())
     raise SystemExit(
         main(
             repo_root=repo,
             args=sys.argv[1:],
             templates_root=os.path.join(repo, "templates"),
-            program_name=os.path.basename(sys.argv[0]),
+            program_name=os.path.basename(sys.argv[0]) or "kbuild",
         )
     )

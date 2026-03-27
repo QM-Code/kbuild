@@ -1,13 +1,13 @@
 # Command Guide
 
-This page is the fast path through the `kbuild.py` command surface. For the
-full option-by-option reference, see [kbuild.md](kbuild.md).
+This page is the fast path through the `kbuild` command surface. For the full
+option-by-option reference, see [kbuild.md](kbuild.md).
 
 ## Command Groups
 
 | Group | Purpose |
 | --- | --- |
-| bootstrap | point a thin wrapper at the shared `kbuild` checkout and create starter config |
+| bootstrap | create starter config and scaffold a repo rooted at the current directory |
 | build | configure, build, and install the core SDK/app and optionally demos |
 | clean | remove retained build slots safely |
 | git | initialize or sync a repo rooted at the current directory |
@@ -16,38 +16,34 @@ full option-by-option reference, see [kbuild.md](kbuild.md).
 ## Bootstrap Commands
 
 ```bash
-./kbuild.py --kbuild-root /path/to/kbuild
-./kbuild.py --kbuild-config
-./kbuild.py --kbuild-init
+kbuild --kbuild-config
+kbuild --kbuild-init
 ```
 
 What they do:
 
-- `--kbuild-root <dir>` validates a shared `kbuild` checkout and writes
-  `./.kbuild.json`.
-- `--kbuild-config` creates a starter `kbuild.json`.
-- `--kbuild-init` scaffolds a new repo from `kbuild.json` and the template set
-  in this repository.
+- `--kbuild-config` creates a starter `./.kbuild.json`.
+- `--kbuild-init` scaffolds a new repo from the effective kbuild config.
 
 ## Build Commands
 
 Normal build:
 
 ```bash
-./kbuild.py --build-latest
+kbuild --build-latest
 ```
 
 Alternate slot:
 
 ```bash
-./kbuild.py --build dev
+kbuild --build dev
 ```
 
 Explicit demo builds:
 
 ```bash
-./kbuild.py --build-demos
-./kbuild.py --build-demos sdk/alpha sdk/beta exe/core
+kbuild --build-demos
+kbuild --build-demos sdk/alpha sdk/beta exe/core
 ```
 
 Important behavior:
@@ -61,10 +57,10 @@ Important behavior:
 ## CMake Build Controls
 
 ```bash
-./kbuild.py --build-latest --cmake-configure
-./kbuild.py --build-latest --cmake-no-configure
-./kbuild.py --build-latest --cmake-jobs 8
-./kbuild.py --build dev --cmake-linkage both
+kbuild --build-latest --cmake-configure
+kbuild --build-latest --cmake-no-configure
+kbuild --build-latest --cmake-jobs 8
+kbuild --build dev --cmake-linkage both
 ```
 
 Rules:
@@ -77,10 +73,10 @@ Rules:
 ## Clean Commands
 
 ```bash
-./kbuild.py --build-list
-./kbuild.py --clean-latest
-./kbuild.py --clean dev
-./kbuild.py --clean-all
+kbuild --build-list
+kbuild --clean-latest
+kbuild --clean dev
+kbuild --clean-all
 ```
 
 Clean behavior is intentionally conservative:
@@ -92,8 +88,8 @@ Clean behavior is intentionally conservative:
 ## Git Commands
 
 ```bash
-./kbuild.py --git-initialize
-./kbuild.py --git-sync "Update docs"
+kbuild --git-initialize
+kbuild --git-sync "Update docs"
 ```
 
 Important behavior:
@@ -106,8 +102,8 @@ Important behavior:
 ## Vcpkg Commands
 
 ```bash
-./kbuild.py --vcpkg-install
-./kbuild.py --vcpkg-sync-baseline
+kbuild --vcpkg-install
+kbuild --vcpkg-sync-baseline
 ```
 
 Important behavior:
@@ -120,7 +116,7 @@ Important behavior:
 
 ## Combination Rules
 
-`kbuild.py` is strict about command mixing.
+`kbuild` is strict about command mixing.
 
 - Root help commands such as `--kbuild`, `--cmake`, `--git`, `--vcpkg`, and
   bare `--clean`/`--build` help forms must run alone.

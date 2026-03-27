@@ -8,5 +8,3 @@
 # Python caches
 __pycache__/
 *.pyc
-# Local kbuild override
-/.kbuild.json

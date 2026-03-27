@@ -1,26 +1,13 @@
-import json
 import os
 import subprocess
 import tempfile
 
+from . import config_ops
 from . import errors
 
 
 def _run(cmd: list[str], *, env: dict[str, str] | None = None) -> None:
     subprocess.run(cmd, check=True, env=env)
-
-
-def _load_json_object(path: str) -> dict[str, object]:
-    if not os.path.isfile(path):
-        errors.die(f"missing required JSON file: {path}")
-    try:
-        with open(path, "r", encoding="utf-8") as handle:
-            payload = json.load(handle)
-    except (OSError, json.JSONDecodeError) as exc:
-        errors.die(f"could not parse {path}: {exc}")
-    if not isinstance(payload, dict):
-        errors.die(f"expected JSON object in {path}")
-    return payload
 
 
 def _canonical_path(path: str) -> str:
@@ -49,12 +36,12 @@ def _require_current_root_git_worktree(repo_root: str, *, operation: str) -> str
             f"refusing to {operation} without local git metadata.\n"
             "required:\n"
             "  ./.git\n\n"
-            "Run `./kbuild.py --git-initialize` first."
+            "Run `kbuild --git-initialize` first."
         )
 
     top_level = _git_worktree_root(repo_root)
     if top_level is None:
-        errors.die("git repository is not initialized. Run `./kbuild.py --git-initialize`.")
+        errors.die("git repository is not initialized. Run `kbuild --git-initialize`.")
 
     if _canonical_path(top_level) != _canonical_path(repo_root):
         errors.die(
@@ -67,19 +54,18 @@ def _require_current_root_git_worktree(repo_root: str, *, operation: str) -> str
 
 
 def load_git_urls(repo_root: str) -> tuple[str, str]:
-    config_path = os.path.join(repo_root, "kbuild.json")
-    raw = _load_json_object(config_path)
+    raw = config_ops.load_effective_kbuild_payload(repo_root, require_local=True)
 
     git_raw = raw.get("git")
     if not isinstance(git_raw, dict):
-        errors.die("kbuild.json key 'git' must be an object")
+        errors.die("kbuild config key 'git' must be an object")
 
     url_raw = git_raw.get("url")
     if not isinstance(url_raw, str) or not url_raw.strip():
-        errors.die("kbuild.json key 'git.url' must be a non-empty string")
+        errors.die("kbuild config key 'git.url' must be a non-empty string")
     auth_raw = git_raw.get("auth")
     if not isinstance(auth_raw, str) or not auth_raw.strip():
-        errors.die("kbuild.json key 'git.auth' must be a non-empty string")
+        errors.die("kbuild config key 'git.auth' must be a non-empty string")
     return url_raw.strip(), auth_raw.strip()
 
 
@@ -100,7 +86,7 @@ def verify_remote_repo_access(auth_url: str) -> None:
         errors.die(
             f"Could not access configured git remote\n  {auth_url}\n\n"
             "This is most likely due to one of the following reasons:\n"
-            "  (1) There is a typo in the git repo specified in kbuild.json (git.auth).\n"
+            "  (1) There is a typo in the git repo specified in the kbuild config (git.auth).\n"
             "  (2) The remote repo does not exist.\n"
             "  (3) Your git credentials for this remote are missing, expired, or invalid.\n"
             "  (4) You do not have network access.\n\n"

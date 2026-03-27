@@ -20,7 +20,7 @@ def _load_batch_repo_tokens(repo_root: str, inline_repo_tokens: list[str]) -> li
 
     errors.die(
         "no batch repos were specified.\n"
-        "Provide repo paths after '--batch' or define 'batch.repos' in ./kbuild.json.",
+        "Provide repo paths after '--batch' or define 'batch.repos' in the kbuild config.",
         code=1,
     )
 
@@ -47,10 +47,10 @@ def _resolve_batch_targets(repo_root: str, repo_tokens: list[str]) -> list[tuple
                 code=1,
             )
 
-        script_path = os.path.join(repo_abs, "kbuild.py")
-        if not os.path.isfile(script_path):
+        local_config_path = os.path.join(repo_abs, config_ops.LOCAL_KBUILD_CONFIG_FILENAME)
+        if not os.path.isfile(local_config_path):
             errors.die(
-                f"batch repo is missing './kbuild.py':\n"
+                f"batch repo is missing './{config_ops.LOCAL_KBUILD_CONFIG_FILENAME}':\n"
                 f"  token: {repo_token}\n"
                 f"  resolved: {repo_abs}",
                 code=1,
@@ -60,14 +60,20 @@ def _resolve_batch_targets(repo_root: str, repo_tokens: list[str]) -> list[tuple
     return resolved_targets
 
 
-def run_batch(repo_root: str, forwarded_args: list[str], inline_repo_tokens: list[str]) -> int:
+def run_batch(
+    repo_root: str,
+    forwarded_args: list[str],
+    inline_repo_tokens: list[str],
+    *,
+    entrypoint_path: str,
+) -> int:
     repo_tokens = _load_batch_repo_tokens(repo_root, inline_repo_tokens)
     targets = _resolve_batch_targets(repo_root, repo_tokens)
 
     for index, (repo_token, repo_abs) in enumerate(targets, start=1):
         print(f"[batch {index}/{len(targets)}] {repo_token}", flush=True)
         result = subprocess.run(
-            [sys.executable, "kbuild.py", *forwarded_args],
+            [sys.executable, entrypoint_path, *forwarded_args],
             cwd=repo_abs,
             check=False,
         )

@@ -26,16 +26,16 @@ If any projects are found, present them to the operator after bootstrap is compl
 
 If you notice issues or have recommendations about the codebase, bring them to the operator.
 
-## Building with kbuild.py
+## Building with kbuild
 
-- Always use `kbuild.py` for builds. Do not use raw `cmake` commands for normal build flows.
-- Always run from the repo root, invoking `./kbuild.py` from that directory.
-- Use `./kbuild.py --help` to inspect the available options.
-- `./kbuild.py` with no arguments also prints usage; it does not build.
-- `./kbuild.py --build-latest` builds the core SDK/app into `build/latest/` and then builds demos listed in `kbuild.json -> build.defaults.demos` (if defined).
-- Use `./kbuild.py --build-demos [demo ...]` for explicit demo builds.
-- With no demo names, `--build-demos` uses `kbuild.json -> build.demos`.
-- Use `./kbuild.py --clean <version>` or `./kbuild.py --clean-latest` before rebuilding when you need a fresh build tree.
+- Always use `kbuild` for builds. Do not use raw `cmake` commands for normal build flows.
+- Always run from the repo root, invoking `kbuild` from that directory.
+- Use `kbuild --help` to inspect the available options.
+- `kbuild` with no arguments also prints usage; it does not build.
+- `kbuild --build-latest` builds the core SDK/app into `build/latest/` and then builds demos listed in `build.defaults.demos` (if defined).
+- Use `kbuild --build-demos [demo ...]` for explicit demo builds.
+- With no demo names, `--build-demos` uses `build.demos`.
+- Use `kbuild --clean <version>` or `kbuild --clean-latest` before rebuilding when you need a fresh build tree.
 
 ## Testing
 

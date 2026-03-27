@@ -1,39 +1,22 @@
 # Config Guide
 
-`kbuild` reads two JSON files with different roles:
+`kbuild` reads up to two JSON files:
 
-- `kbuild.json`: shared project configuration committed with the repo
-- `.kbuild.json`: local bootstrap and overlay configuration for the current
-  checkout
+- `.kbuild.json`: required repo marker and primary config
+- `kbuild.json`: optional shared base config
 
-## Bootstrap File
+At runtime, `kbuild` deep-merges `.kbuild.json` on top of `kbuild.json` when
+both files exist.
 
-`./.kbuild.json` is usually created by:
-
-```bash
-./kbuild.py --kbuild-root /path/to/kbuild
-```
-
-Typical contents:
-
-```json
-{
-  "kbuild": {
-    "root": "/path/to/kbuild"
-  }
-}
-```
-
-`kbuild.root` tells the thin wrapper where to find the shared implementation
-under `<root>/libs/kbuild`.
-
-## Shared Project Config
+## Primary Config
 
 Starter config:
 
 ```bash
-./kbuild.py --kbuild-config
+kbuild --kbuild-config
 ```
+
+This creates `./.kbuild.json`.
 
 Representative full example:
 
@@ -94,6 +77,7 @@ Representative full example:
 | `cmake` | no | build-system metadata and SDK export settings |
 | `vcpkg` | no | repo-local `vcpkg` manifest dependencies |
 | `build` | no | job count, linkage defaults, and demo lists |
+| `batch` | no | relative child-repo list for `--batch` |
 
 Unknown top-level keys are rejected.
 
@@ -148,8 +132,8 @@ If `cmake` is omitted, normal build mode validates config and returns
 - each dependency currently supports only `prefix`
 - `{version}` in the prefix is replaced with the active build slot
 
-Dependency prefixes are validated before build use. `kbuild` expects each prefix
-to contain:
+Dependency prefixes are validated before build use. `kbuild` expects each
+prefix to contain:
 
 - `include/`
 - `lib/`
@@ -180,18 +164,19 @@ If the `vcpkg` object is present, build flow expects repo-local setup under:
 
 `build.demos`
 
-- optional list used by `./kbuild.py --build-demos` when no demo names are
-  passed
+- optional list used by `kbuild --build-demos` when no demo names are passed
 
 `build.defaults.demos`
 
-- optional list auto-built after `./kbuild.py --build-latest`
+- optional list auto-built after `kbuild --build-latest`
 
 ## Local Overlay Behavior
 
-At runtime, `kbuild` deep-merges `.kbuild.json` on top of `kbuild.json`. In
-practice, most repos should keep `.kbuild.json` limited to local bootstrap or
-machine-specific overrides and avoid committing it.
+If you want a shared committed base config, keep it in `kbuild.json` and put
+machine-specific or repo-local overrides in `.kbuild.json`.
+
+If you do not need that split, define the entire config in `.kbuild.json` and
+omit `kbuild.json` entirely.
 
 ## Strictness Rules
 

@@ -7,7 +7,7 @@ def run(
     repo_root: str,
     argv: list[str],
     kbuild_root: str,
-    program_name: str = "kbuild.py",
+    program_name: str = "kbuild",
 ) -> int:
     templates_root = os.path.join(kbuild_root, "templates")
     return engine.main(

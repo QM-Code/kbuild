@@ -67,6 +67,11 @@ markers, and path-traversal-like values are hard errors.
 - `./.kbuild.json` is required for every command except `--kbuild-config`.
 - `./kbuild.json` is optional and acts only as a base layer when present.
 - Use simple version slot names (`latest`, `dev`, `ci`, `0.1`), not paths.
+- Generated artifacts are expected to stay under `build/` directories. Known
+  backend-specific residuals outside `build/` are hard errors for build and
+  git-sync operations.
+- Python repo trees are also checked for `__pycache__/`, `*.pyc`, and `*.pyo`
+  outside `build/`.
 - `--git-sync` only operates on a repo rooted at the current directory and
   fails without local `./.git`.
 - `--batch` runs the remaining args inside child repos; with no inline repo
@@ -186,6 +191,9 @@ option group and exits with success.
 
 Builds the `latest` slot explicitly.
 
+Before the build starts, `kbuild` runs backend-specific hygiene checks and
+refuses the build if known generated residuals appear outside `build/`.
+
 ### `--build-demos [demo ...]`
 
 Builds demos after core SDK build succeeds.
@@ -236,6 +244,9 @@ remote.
 
 Runs `git add -A`, commits if needed, and pushes in the repo rooted at the
 current directory.
+
+Before the sync starts, `kbuild` runs backend-specific hygiene checks and
+refuses to sync if known generated residuals appear outside `build/`.
 
 ### `--batch [repo ...]`
 

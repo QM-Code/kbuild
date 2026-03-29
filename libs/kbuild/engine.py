@@ -10,6 +10,7 @@ from . import build_ops
 from . import config_ops
 from . import errors
 from . import git_ops
+from . import residual_ops
 from . import repo_init
 from . import vcpkg_ops
 
@@ -434,8 +435,6 @@ def main(
     if initialize_git:
         _, git_auth = git_ops.load_git_urls(repo_root)
         return git_ops.initialize_git_repo(repo_root, git_auth)
-    if git_sync_requested:
-        return git_ops.git_sync(repo_root, git_sync_message)
     if list_builds:
         return build_ops.list_build_dirs(repo_root)
     if clean_latest:
@@ -447,12 +446,26 @@ def main(
 
     config = config_ops.load_kbuild_config(repo_root)
 
+    if git_sync_requested:
+        residual_ops.ensure_repo_hygiene(
+            repo_root=repo_root,
+            config=config,
+            operation="sync git changes",
+        )
+        return git_ops.git_sync(repo_root, git_sync_message)
+
     if sync_vcpkg_baseline_only:
         if not config.has_vcpkg:
             print("Nothing to do.")
             return 0
         vcpkg_ops.sync_vcpkg_baseline(repo_root)
         return 0
+
+    residual_ops.ensure_repo_hygiene(
+        repo_root=repo_root,
+        config=config,
+        operation="build",
+    )
 
     if install_vcpkg and config.has_vcpkg:
         vcpkg_ops.install_local_vcpkg(repo_root)

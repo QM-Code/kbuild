@@ -9,6 +9,24 @@ from . import config_ops
 from . import errors
 
 
+def find_unexpected_residuals(repo_root: str) -> tuple[str, list[str]] | None:
+    findings: list[str] = []
+    for current_root, dirnames, filenames in os.walk(repo_root):
+        dirnames[:] = sorted(
+            dirname
+            for dirname in dirnames
+            if dirname not in (".git", "build", "node_modules")
+        )
+        for filename in sorted(filenames):
+            candidate_path = os.path.join(current_root, filename)
+            if filename == "kbuild-javascript-sdk.json" or _looks_like_generated_launcher(candidate_path):
+                findings.append(candidate_path)
+
+    if not findings:
+        return None
+    return ("JavaScript kbuild artifacts", findings)
+
+
 def _load_javascript_config(
     repo_root: str,
 ) -> tuple[str, str, list[str], list[tuple[str, str]], dict[str, tuple[str, str]]]:
@@ -155,6 +173,21 @@ def _resolve_dependency_sdk_roots(
 def _javascript_sdk_env_key(package_name: str) -> str:
     normalized = "".join(char if char.isalnum() else "_" for char in package_name.upper())
     return f"KTOOLS_JS_SDK_ROOT_{normalized}"
+
+
+def _looks_like_generated_launcher(path: str) -> bool:
+    try:
+        if not os.path.isfile(path) or os.path.getsize(path) > 32 * 1024:
+            return False
+        with open(path, "r", encoding="utf-8", errors="replace") as handle:
+            text = handle.read()
+    except OSError:
+        return False
+    return (
+        text.startswith("#!/usr/bin/env bash\nset -euo pipefail\n")
+        and "KTOOLS_JS_SDK_ROOT_" in text
+        and "exec node " in text
+    )
 
 
 def _run_node_test(test_globs: list[str], *, repo_root: str, env: dict[str, str]) -> None:

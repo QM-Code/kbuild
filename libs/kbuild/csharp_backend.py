@@ -3,15 +3,64 @@ import shutil
 import subprocess
 import textwrap
 import xml.sax.saxutils as xml_utils
+from dataclasses import dataclass
 
 from . import build_ops
 from . import config_ops
 from . import errors
 
 
+_RESIDUAL_DIR_NAMES = {
+    "bin",
+    "obj",
+    "TestResults",
+}
+
+_RESIDUAL_FILE_NAMES = {
+    "project.assets.json",
+}
+
+_RESIDUAL_FILE_SUFFIXES = (
+    ".deps.json",
+    ".runtimeconfig.json",
+    ".runtimeconfig.dev.json",
+    ".sourcelink.json",
+    ".nuget.dgspec.json",
+    ".nuget.g.props",
+    ".nuget.g.targets",
+)
+
+
 def is_enabled(repo_root: str) -> bool:
     raw = config_ops.load_effective_kbuild_payload(repo_root, require_local=True)
     return raw.get("csharp") is not None
+
+
+def find_unexpected_residuals(repo_root: str) -> tuple[str, list[str]] | None:
+    findings: list[str] = []
+    for current_root, dirnames, filenames in os.walk(repo_root):
+        unexpected_dirs = []
+        kept_dirnames = []
+        for dirname in sorted(dirnames):
+            if dirname in (".git", "build"):
+                continue
+            if dirname in _RESIDUAL_DIR_NAMES:
+                unexpected_dirs.append(os.path.join(current_root, dirname))
+                continue
+            kept_dirnames.append(dirname)
+        dirnames[:] = kept_dirnames
+        findings.extend(unexpected_dirs)
+
+        for filename in sorted(filenames):
+            if filename in _RESIDUAL_FILE_NAMES:
+                findings.append(os.path.join(current_root, filename))
+                continue
+            if filename.endswith(_RESIDUAL_FILE_SUFFIXES):
+                findings.append(os.path.join(current_root, filename))
+
+    if not findings:
+        return None
+    return ("C# build residuals", findings)
 
 
 def _load_csharp_config(
@@ -169,22 +218,23 @@ def _relative_link_label(base_dir: str, path: str) -> str:
     return os.path.relpath(path, base_dir).replace("\\", "/")
 
 
-def _write_generated_project(
-    *,
-    project_path: str,
-    assembly_name: str,
-    target_framework: str,
-    output_type: str,
-    output_dir: str,
-    intermediate_dir: str,
-    source_files: list[str],
-    references: list[tuple[str, str]],
-) -> None:
-    os.makedirs(os.path.dirname(project_path), exist_ok=True)
+@dataclass(frozen=True)
+class _GeneratedProjectSpec:
+    project_path: str
+    assembly_name: str
+    target_framework: str
+    output_type: str
+    output_dir: str
+    intermediate_dir: str
+    source_files: list[str]
+    references: list[tuple[str, str]]
 
+
+def _write_generated_project(spec: _GeneratedProjectSpec) -> None:
+    os.makedirs(os.path.dirname(spec.project_path), exist_ok=True)
     compile_items = "\n".join(
-        f'    <Compile Include="{xml_utils.escape(path)}" Link="{xml_utils.escape(_relative_link_label(os.path.dirname(project_path), path))}" />'
-        for path in source_files
+        f'    <Compile Include="{xml_utils.escape(path)}" Link="{xml_utils.escape(_relative_link_label(os.path.dirname(spec.project_path), path))}" />'
+        for path in spec.source_files
     )
     reference_items = "\n".join(
         textwrap.dedent(
@@ -194,26 +244,24 @@ def _write_generated_project(
                   <Private>true</Private>
                 </Reference>"""
         ).rstrip()
-        for name, path in references
+        for name, path in spec.references
     )
 
     payload = textwrap.dedent(
         f"""\
         <Project Sdk="Microsoft.NET.Sdk">
           <PropertyGroup>
-            <TargetFramework>{xml_utils.escape(target_framework)}</TargetFramework>
-            <AssemblyName>{xml_utils.escape(assembly_name)}</AssemblyName>
-            <RootNamespace>{xml_utils.escape(assembly_name)}</RootNamespace>
-            <OutputType>{xml_utils.escape(output_type)}</OutputType>
+            <TargetFramework>{xml_utils.escape(spec.target_framework)}</TargetFramework>
+            <AssemblyName>{xml_utils.escape(spec.assembly_name)}</AssemblyName>
+            <RootNamespace>{xml_utils.escape(spec.assembly_name)}</RootNamespace>
+            <OutputType>{xml_utils.escape(spec.output_type)}</OutputType>
             <Nullable>disable</Nullable>
             <ImplicitUsings>disable</ImplicitUsings>
             <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
             <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
             <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
             <UseAppHost>false</UseAppHost>
-            <OutputPath>{xml_utils.escape(output_dir)}</OutputPath>
-            <BaseIntermediateOutputPath>{xml_utils.escape(intermediate_dir)}</BaseIntermediateOutputPath>
-            <IntermediateOutputPath>{xml_utils.escape(intermediate_dir)}</IntermediateOutputPath>
+            <OutputPath>{xml_utils.escape(spec.output_dir)}</OutputPath>
           </PropertyGroup>
           <ItemGroup>
         {compile_items}
@@ -225,15 +273,31 @@ def _write_generated_project(
         payload += "\n  </ItemGroup>"
     payload += "\n</Project>\n"
 
-    with open(project_path, "w", encoding="utf-8", newline="\n") as handle:
+    with open(spec.project_path, "w", encoding="utf-8", newline="\n") as handle:
         handle.write(payload)
 
 
-def _run_dotnet_build(dotnet: str, project_path: str) -> None:
+def _run_dotnet_build(dotnet: str, spec: _GeneratedProjectSpec) -> None:
+    normalized_intermediate_dir = os.path.join(spec.intermediate_dir, "")
     subprocess.run(
-        [dotnet, "build", project_path, "-c", "Release", "--nologo"],
+        [
+            dotnet,
+            "build",
+            spec.project_path,
+            "-c",
+            "Release",
+            "--nologo",
+            f"-p:BaseIntermediateOutputPath={normalized_intermediate_dir}",
+            f"-p:MSBuildProjectExtensionsPath={normalized_intermediate_dir}",
+            f"-p:IntermediateOutputPath={normalized_intermediate_dir}",
+        ],
         check=True,
     )
+
+
+def _build_generated_project(dotnet: str, spec: _GeneratedProjectSpec) -> None:
+    _write_generated_project(spec)
+    _run_dotnet_build(dotnet, spec)
 
 
 def _write_dotnet_launcher(path: str, dll_path: str) -> None:
@@ -271,9 +335,8 @@ def _build_core_sdk(
     _prepare_dir(output_dir)
     _prepare_dir(intermediate_dir)
 
-    project_path = os.path.join(build_dir, "kbuild", "core", f"{assembly_name}.csproj")
-    _write_generated_project(
-        project_path=project_path,
+    spec = _GeneratedProjectSpec(
+        project_path=os.path.join(build_dir, "kbuild", "core", f"{assembly_name}.csproj"),
         assembly_name=assembly_name,
         target_framework=target_framework,
         output_type="Library",
@@ -282,7 +345,7 @@ def _build_core_sdk(
         source_files=source_files,
         references=dependency_references,
     )
-    _run_dotnet_build(dotnet, project_path)
+    _build_generated_project(dotnet, spec)
     return os.path.join(output_dir, f"{assembly_name}.dll")
 
 
@@ -307,9 +370,8 @@ def _build_tests(
     _prepare_dir(intermediate_dir)
 
     test_assembly_name = f"{assembly_name}.Tests"
-    project_path = os.path.join(tests_root, "kbuild", f"{test_assembly_name}.csproj")
-    _write_generated_project(
-        project_path=project_path,
+    spec = _GeneratedProjectSpec(
+        project_path=os.path.join(tests_root, "kbuild", f"{test_assembly_name}.csproj"),
         assembly_name=test_assembly_name,
         target_framework=target_framework,
         output_type="Exe",
@@ -318,7 +380,7 @@ def _build_tests(
         source_files=source_files,
         references=references,
     )
-    _run_dotnet_build(dotnet, project_path)
+    _build_generated_project(dotnet, spec)
     _write_dotnet_launcher(
         os.path.join(tests_root, "run-tests"),
         os.path.join(output_dir, f"{test_assembly_name}.dll"),
@@ -366,9 +428,8 @@ def _build_demo(
         intermediate_dir = os.path.join(demo_build_dir, "obj")
         _prepare_dir(output_dir)
         _prepare_dir(intermediate_dir)
-        project_path = os.path.join(demo_build_dir, "kbuild", f"{demo_assembly_name}.csproj")
-        _write_generated_project(
-            project_path=project_path,
+        spec = _GeneratedProjectSpec(
+            project_path=os.path.join(demo_build_dir, "kbuild", f"{demo_assembly_name}.csproj"),
             assembly_name=demo_assembly_name,
             target_framework=target_framework,
             output_type="Library",
@@ -377,7 +438,7 @@ def _build_demo(
             source_files=source_files,
             references=[*references, *built_demo_sdk_references],
         )
-        _run_dotnet_build(dotnet, project_path)
+        _build_generated_project(dotnet, spec)
         dll_path = os.path.join(output_dir, f"{demo_assembly_name}.dll")
         print(f"Build complete -> dir={demo_build_dir} | sdk={os.path.join(demo_build_dir, 'sdk')}")
         return demo_assembly_name, dll_path
@@ -391,9 +452,8 @@ def _build_demo(
     intermediate_dir = os.path.join(demo_build_dir, "obj")
     _prepare_dir(output_dir)
     _prepare_dir(intermediate_dir)
-    project_path = os.path.join(demo_build_dir, "kbuild", f"{demo_assembly_name}.csproj")
-    _write_generated_project(
-        project_path=project_path,
+    spec = _GeneratedProjectSpec(
+        project_path=os.path.join(demo_build_dir, "kbuild", f"{demo_assembly_name}.csproj"),
         assembly_name=demo_assembly_name,
         target_framework=target_framework,
         output_type="Exe",
@@ -402,7 +462,7 @@ def _build_demo(
         source_files=source_files,
         references=[*references, *built_demo_sdk_references],
     )
-    _run_dotnet_build(dotnet, project_path)
+    _build_generated_project(dotnet, spec)
     launcher_name = "bootstrap" if demo_name == "bootstrap" else "test"
     _write_dotnet_launcher(
         os.path.join(demo_build_dir, launcher_name),

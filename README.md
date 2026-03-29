@@ -2,7 +2,10 @@
 
 `kbuild` is the standardized build and repo orchestration tool for ktools-style
 projects. It is intentionally strict about configuration, directory layout, and
-command combinations so build automation stays predictable.
+command combinations so build automation stays predictable. It also enforces
+backend-owned hygiene checks for generated artifacts that appear outside the
+intended `build/` trees, including Python bytecode/cache output in Python
+source trees.
 
 The shared tree supports multiple backend styles behind one command model.
 Currently supported backend sections are:
@@ -61,6 +64,7 @@ kbuild --vcpkg-install
 - build slots under `build/<slot>/`
 - SDK installation under `build/<slot>/sdk`
 - ordered demo builds under `demo/*/build/<slot>/`
+- backend-specific residual checks before build and git-sync operations
 - repo scaffolding from templates
 - optional repo-local `vcpkg`
 - git initialization and simple sync flows

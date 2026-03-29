@@ -18,6 +18,8 @@ class CargoDemoTarget:
     demo_name: str
     kind: str
     target_name: str
+    manifest_path: str | None = None
+    package_name: str = ""
 
 
 @dataclass(frozen=True)
@@ -187,7 +189,7 @@ def _parse_cargo_section(raw: dict[str, object]) -> tuple[bool, str, str, bool, 
         if not isinstance(demo_raw, dict):
             errors.die(f"kbuild config key 'cargo.demos.{demo_name}' must be an object")
 
-        allowed_demo = {"bin", "example"}
+        allowed_demo = {"bin", "example", "manifest", "package"}
         for key in demo_raw:
             if key not in allowed_demo:
                 errors.die(f"unexpected key in kbuild config 'cargo.demos.{demo_name}': '{key}'")
@@ -205,10 +207,30 @@ def _parse_cargo_section(raw: dict[str, object]) -> tuple[bool, str, str, bool, 
             errors.die(
                 f"kbuild config key 'cargo.demos.{demo_name}.{target_key}' must be a non-empty string"
             )
+        manifest_path: str | None = None
+        if "manifest" in demo_raw:
+            manifest_raw = demo_raw.get("manifest")
+            if not isinstance(manifest_raw, str) or not manifest_raw.strip():
+                errors.die(
+                    f"kbuild config key 'cargo.demos.{demo_name}.manifest' must be a non-empty string"
+                )
+            manifest_path = manifest_raw.strip()
+
+        package_name = ""
+        if "package" in demo_raw:
+            package_raw = demo_raw.get("package")
+            if not isinstance(package_raw, str) or not package_raw.strip():
+                errors.die(
+                    f"kbuild config key 'cargo.demos.{demo_name}.package' must be a non-empty string"
+                )
+            package_name = package_raw.strip()
+
         cargo_demo_targets[demo_name] = CargoDemoTarget(
             demo_name=demo_name,
             kind=target_key,
             target_name=target_name_raw.strip(),
+            manifest_path=manifest_path,
+            package_name=package_name,
         )
 
     return has_cargo, cargo_manifest, cargo_package, cargo_build_tests, cargo_sdk_include, cargo_demo_targets

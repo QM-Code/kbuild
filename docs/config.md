@@ -169,6 +169,9 @@ prefix to contain:
 - each entry must define exactly one of:
   - `bin`
   - `example`
+- each entry may also define:
+  - `manifest`
+  - `package`
 
 ## Java Settings
 
@@ -193,6 +196,11 @@ prefix to contain:
 `swift.package_path`
 
 - required path to the Swift package root containing `Package.swift`
+
+`swift.demo_package_path`
+
+- optional path to the Swift demo package root containing `Package.swift`
+- defaults to `swift.package_path`
 
 `swift.demo_products`
 

@@ -69,6 +69,14 @@ currently supports:
 - Demo builds live under `demo/<demo>/build/<slot>/`.
 - The default slot is `latest`.
 
+`Repo hygiene`
+
+- backend-specific generated artifacts are expected to stay under `build/`
+- `kbuild` refuses build and git-sync operations when known residuals appear
+  outside those directories
+- Python repos are also checked for `__pycache__/`, `*.pyc`, and `*.pyo`
+  outside `build/`
+
 `SDK-first demos`
 
 - Root builds install an SDK under `build/<slot>/sdk`.

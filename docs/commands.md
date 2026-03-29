@@ -51,6 +51,10 @@ Important behavior:
 - Core output is `build/<slot>/`.
 - SDK install output is `build/<slot>/sdk`.
 - Demo output is `demo/<demo>/build/<slot>/`.
+- `kbuild` refuses the build if the active backend finds known generated
+  residuals outside `build/`.
+- Python repo trees are also checked for `__pycache__/`, `*.pyc`, and `*.pyo`
+  outside `build/`.
 - `--build-demos` with no demo names uses `build.demos`.
 - `--build-latest` can auto-build demos from `build.defaults.demos`.
 
@@ -98,6 +102,8 @@ Important behavior:
   initializes `main`, creates the first commit, and pushes `origin/main`.
 - `--git-sync` only works when `./.git` exists and the current directory is the
   git worktree root.
+- `--git-sync` also refuses to run if the active backend finds known generated
+  residuals outside `build/`.
 
 ## Vcpkg Commands
 

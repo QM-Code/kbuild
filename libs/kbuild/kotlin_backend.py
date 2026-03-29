@@ -13,6 +13,23 @@ def is_enabled(repo_root: str) -> bool:
     return raw.get("kotlin") is not None
 
 
+def find_unexpected_residuals(repo_root: str) -> tuple[str, list[str]] | None:
+    findings: list[str] = []
+    for current_root, dirnames, filenames in os.walk(repo_root):
+        dirnames[:] = sorted(
+            dirname
+            for dirname in dirnames
+            if dirname not in (".git", "build")
+        )
+        for filename in sorted(filenames):
+            if filename.endswith(".class") or filename.endswith(".kotlin_module"):
+                findings.append(os.path.join(current_root, filename))
+
+    if not findings:
+        return None
+    return ("Kotlin compiler output", findings)
+
+
 def _load_kotlin_config(repo_root: str) -> tuple[list[str], list[str], str, str, list[tuple[str, str]]]:
     raw = config_ops.load_effective_kbuild_payload(repo_root, require_local=True)
     kotlin_raw = raw.get("kotlin")

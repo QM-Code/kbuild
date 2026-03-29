@@ -5,6 +5,7 @@ from . import errors
 from . import javascript_backend
 from . import java_backend
 from . import kotlin_backend
+from . import python_backend
 from . import swift_backend
 from .config_ops import KbuildConfig
 
@@ -121,3 +122,36 @@ def run_backend(
         )
 
     errors.die(f"unknown internal backend '{backend_name}'")
+
+
+def find_unexpected_residuals(
+    *,
+    repo_root: str,
+    config: KbuildConfig,
+) -> tuple[str, list[str]] | None:
+    backend_name = config.backend_name
+    if backend_name is None:
+        return None
+
+    if backend_name == "cargo":
+        finding = cargo_backend.find_unexpected_residuals(repo_root)
+    elif backend_name == "java":
+        finding = java_backend.find_unexpected_residuals(repo_root)
+    elif backend_name == "swift":
+        finding = swift_backend.find_unexpected_residuals(repo_root)
+    elif backend_name == "kotlin":
+        finding = kotlin_backend.find_unexpected_residuals(repo_root)
+    elif backend_name == "csharp":
+        finding = csharp_backend.find_unexpected_residuals(repo_root)
+    elif backend_name == "javascript":
+        finding = javascript_backend.find_unexpected_residuals(repo_root)
+    else:
+        finding = None
+
+    if finding is not None:
+        return finding
+
+    if python_backend.is_enabled(repo_root):
+        return python_backend.find_unexpected_residuals(repo_root)
+
+    return None

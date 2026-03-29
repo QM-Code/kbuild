@@ -9,6 +9,31 @@ from .config_ops import KbuildConfig
 from .config_ops import CargoDemoTarget
 
 
+def find_unexpected_residuals(repo_root: str) -> tuple[str, list[str]] | None:
+    findings: list[str] = []
+    for current_root, dirnames, _ in os.walk(repo_root):
+        next_dirnames: list[str] = []
+        for dirname in sorted(dirnames):
+            if dirname in (".git", "build"):
+                continue
+
+            candidate = os.path.join(current_root, dirname)
+            if dirname in ("target", ".cargo-home"):
+                findings.append(candidate)
+                continue
+
+            if os.path.basename(current_root) == ".cargo" and dirname in ("git", "registry"):
+                findings.append(candidate)
+                continue
+
+            next_dirnames.append(dirname)
+        dirnames[:] = next_dirnames
+
+    if not findings:
+        return None
+    return ("Cargo build artifacts", findings)
+
+
 def _run(cmd: list[str], *, cwd: str, env: dict[str, str]) -> None:
     subprocess.run(cmd, cwd=cwd, check=True, env=env)
 
@@ -64,14 +89,24 @@ def _copy_sdk_snapshot(
 def _build_demo_target(
     *,
     repo_root: str,
-    manifest_abs: str,
-    manifest_dir: str,
+    root_manifest_abs: str,
+    root_manifest_dir: str,
     env: dict[str, str],
     build_jobs: int,
     version: str,
     demo_target: CargoDemoTarget,
-    package_name: str,
+    root_package_name: str,
 ) -> None:
+    manifest_abs = root_manifest_abs
+    manifest_dir = root_manifest_dir
+    if demo_target.manifest_path:
+        manifest_abs, manifest_dir = _resolve_manifest(repo_root, demo_target.manifest_path)
+
+    package_name = root_package_name
+    if demo_target.manifest_path:
+        package_name = demo_target.package_name
+    elif demo_target.package_name:
+        package_name = demo_target.package_name
     cmd = [
         "cargo",
         "build",
@@ -129,7 +164,7 @@ def build_cargo_repo(
     env = os.environ.copy()
     env["CARGO_TARGET_DIR"] = target_dir
     if not env.get("CARGO_HOME", "").strip():
-        cargo_home = os.path.join(repo_root, ".cargo-home")
+        cargo_home = os.path.join(target_dir, "cargo-home")
         os.makedirs(cargo_home, exist_ok=True)
         env["CARGO_HOME"] = cargo_home
 
@@ -177,13 +212,13 @@ def build_cargo_repo(
             )
         _build_demo_target(
             repo_root=repo_root,
-            manifest_abs=manifest_abs,
-            manifest_dir=manifest_dir,
+            root_manifest_abs=manifest_abs,
+            root_manifest_dir=manifest_dir,
             env=env,
             build_jobs=build_jobs,
             version=version,
             demo_target=demo_target,
-            package_name=package_name,
+            root_package_name=package_name,
         )
 
     return 0

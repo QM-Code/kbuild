@@ -8,10 +8,23 @@ This shared `kbuild` tree includes a SwiftPM backend used by the
 For repos with a `swift` config block:
 
 - core package build output lives under `build/<slot>/swiftpm/`
+- demo package build output lives under `build/<slot>/swiftpm-demo/` when demos use a separate package
 - SDK output is a source snapshot under `build/<slot>/sdk/`
 - tests get a launcher at `build/<slot>/tests/run-tests`
 - executable demos get launchers under `demo/<demo>/build/<slot>/`
 - library demos get a source snapshot under `demo/<demo>/build/<slot>/sdk/`
+
+Swift repos can keep the library package and demo package separate:
+
+- `swift.package_path`: library package root, typically `src`
+- `swift.demo_package_path`: demo package root, typically `demo`
+
+If `swift.demo_package_path` is omitted, demo builds reuse `swift.package_path`.
+
+`kbuild` also rejects stray SwiftPM `.build/` directories outside `build/`.
+When running `swift test` or `swift run` directly, pass `--scratch-path`
+inside the staged `build/<slot>/swiftpm*` tree so SwiftPM output stays under
+`build/`.
 
 ## Local Swift State
 

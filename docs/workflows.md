@@ -33,6 +33,9 @@ Normal build:
 kbuild --build-latest
 ```
 
+Before the build starts, `kbuild` validates that the active backend does not
+see known generated residuals outside `build/`.
+
 Fast rebuild from an existing cache:
 
 ```bash
@@ -115,7 +118,9 @@ kbuild --git-sync "Update project docs"
 ```
 
 `kbuild` refuses to use a parent git worktree for sync operations. The repo
-must be rooted at the current directory.
+must be rooted at the current directory. It also refuses to sync when the
+active backend detects known generated residuals outside `build/`. Python repo
+trees are also checked for `__pycache__/`, `*.pyc`, and `*.pyo`.
 
 ## Vcpkg Bring-Up
 

@@ -32,28 +32,30 @@ def _write_json(path: str, payload: object) -> None:
         handle.write("\n")
 
 
-def _make_java_repo(repo_root: str) -> None:
+def _make_csharp_repo(repo_root: str) -> None:
     _write_json(
         os.path.join(repo_root, ".kbuild.json"),
         {
             "project": {
-                "title": "Test Java Repo",
-                "id": "test_java_repo",
+                "title": "Test C# Repo",
+                "id": "test_csharp_repo",
             },
             "git": {
-                "url": "https://example.invalid/test-java-repo",
-                "auth": "git@example.invalid:test-java-repo.git",
+                "url": "https://example.invalid/test-csharp-repo",
+                "auth": "git@example.invalid:test-csharp-repo.git",
             },
-            "java": {
+            "csharp": {
                 "source_roots": ["src"],
                 "test_roots": ["tests/src"],
                 "demo_root": "demo",
+                "assembly_name": "TestCsharpRepo",
+                "target_framework": "net10.0",
             },
         },
     )
     _write_text(
-        os.path.join(repo_root, "src", "example", "Main.java"),
-        "package example;\npublic final class Main {}\n",
+        os.path.join(repo_root, "src", "Program.cs"),
+        "namespace Example;\npublic static class Program { }\n",
     )
 
 
@@ -73,22 +75,28 @@ def _run_kbuild(repo_root: str, argv: list[str]) -> tuple[int, str]:
     return exit_code, stderr.getvalue()
 
 
-class JavaResidualTests(unittest.TestCase):
-    def test_build_rejects_class_files_outside_build(self) -> None:
-        with tempfile.TemporaryDirectory(prefix="kbuild-java-residual-build-") as repo_root:
-            _make_java_repo(repo_root)
-            _write_text(os.path.join(repo_root, "src", "example", "Main.class"), "not-a-real-class")
+class CsharpResidualTests(unittest.TestCase):
+    def test_build_rejects_dotnet_residuals_outside_build(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="kbuild-csharp-residual-build-") as repo_root:
+            _make_csharp_repo(repo_root)
+            _write_text(
+                os.path.join(repo_root, "src", "obj", "project.assets.json"),
+                "{}\n",
+            )
 
             code, stderr = _run_kbuild(repo_root, ["--build-latest"])
 
             self.assertEqual(code, 2)
-            self.assertIn("refusing to build: found Java class files outside build/.", stderr)
-            self.assertIn("./src/example/Main.class", stderr)
+            self.assertIn("refusing to build: found C# build residuals outside build/.", stderr)
+            self.assertIn("./src/obj", stderr)
 
-    def test_git_sync_rejects_class_files_outside_build(self) -> None:
-        with tempfile.TemporaryDirectory(prefix="kbuild-java-residual-git-") as repo_root:
-            _make_java_repo(repo_root)
-            _write_text(os.path.join(repo_root, "src", "example", "Main.class"), "not-a-real-class")
+    def test_git_sync_rejects_testresults_outside_build(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="kbuild-csharp-residual-git-") as repo_root:
+            _make_csharp_repo(repo_root)
+            _write_text(
+                os.path.join(repo_root, "tests", "TestResults", "run.trx"),
+                "test output\n",
+            )
             subprocess.run(
                 ["git", "init", repo_root],
                 check=True,
@@ -99,15 +107,19 @@ class JavaResidualTests(unittest.TestCase):
             code, stderr = _run_kbuild(repo_root, ["--git-sync", "Test sync"])
 
             self.assertEqual(code, 2)
-            self.assertIn("refusing to sync git changes: found Java class files outside build/.", stderr)
-            self.assertIn("./src/example/Main.class", stderr)
+            self.assertIn("refusing to sync git changes: found C# build residuals outside build/.", stderr)
+            self.assertIn("./tests/TestResults", stderr)
 
     def test_residual_check_ignores_build_directories(self) -> None:
-        with tempfile.TemporaryDirectory(prefix="kbuild-java-residual-clean-") as repo_root:
-            _make_java_repo(repo_root)
+        with tempfile.TemporaryDirectory(prefix="kbuild-csharp-residual-clean-") as repo_root:
+            _make_csharp_repo(repo_root)
             _write_text(
-                os.path.join(repo_root, "build", "latest", "sdk", "classes", "example", "Main.class"),
-                "generated-core-class",
+                os.path.join(repo_root, "build", "latest", "obj", "project.assets.json"),
+                "{}\n",
+            )
+            _write_text(
+                os.path.join(repo_root, "build", "latest", "sdk", "lib", "TestCsharpRepo.deps.json"),
+                "{}\n",
             )
             _write_text(
                 os.path.join(
@@ -117,11 +129,23 @@ class JavaResidualTests(unittest.TestCase):
                     "core",
                     "build",
                     "latest",
-                    "classes",
-                    "example",
-                    "Main.class",
+                    "obj",
+                    "project.assets.json",
                 ),
-                "generated-demo-class",
+                "{}\n",
+            )
+            _write_text(
+                os.path.join(
+                    repo_root,
+                    "demo",
+                    "exe",
+                    "core",
+                    "build",
+                    "latest",
+                    "bin",
+                    "Demo.runtimeconfig.json",
+                ),
+                "{}\n",
             )
 
             config = config_ops.load_kbuild_config(repo_root)

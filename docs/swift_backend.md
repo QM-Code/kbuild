@@ -5,7 +5,7 @@ This shared `kbuild` tree includes a SwiftPM backend used by the
 
 ## Current Model
 
-For repos with a `swift` config block:
+For projects with a `swift` config block:
 
 - core package build output lives under `build/<slot>/swiftpm/`
 - demo package build output lives under `build/<slot>/swiftpm-demo/` when demos use a separate package
@@ -14,7 +14,7 @@ For repos with a `swift` config block:
 - executable demos get launchers under `demo/<demo>/build/<slot>/`
 - library demos get a source snapshot under `demo/<demo>/build/<slot>/sdk/`
 
-Swift repos can keep the library package and demo package separate:
+Swift projects can keep the library package and demo package separate:
 
 - `swift.package_path`: library package root, typically `src`
 - `swift.demo_package_path`: demo package root, typically `demo`

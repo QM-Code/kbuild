@@ -44,9 +44,9 @@ def ensure_local_repo_config_exists(repo_root: str) -> None:
     if os.path.exists(local_path):
         fail(f"expected './{LOCAL_CONFIG_FILENAME}' to be a regular file", exit_code=1)
     fail(
-        "current directory is not a valid kbuild repo root.\n"
+        "current directory is not a valid kbuild project root.\n"
         f"Missing required file './{LOCAL_CONFIG_FILENAME}'.\n"
-        "Run 'kbuild --kbuild-config' from the repo root first.",
+        "Run 'kbuild --kbuild-config' from the project root first.",
         exit_code=1,
     )
 
@@ -75,4 +75,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

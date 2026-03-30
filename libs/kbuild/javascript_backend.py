@@ -157,7 +157,7 @@ def _resolve_dependency_sdk_roots(
                 "JavaScript dependency SDK directory does not exist.\n"
                 f"Dependency: {dependency_name}\n"
                 f"Expected:\n  {candidate_path}\n"
-                "Build the dependency repo first for the same slot."
+                "Build the dependency component first for the same slot."
             )
         candidate_src = os.path.join(candidate_path, "src", dependency_name)
         if not os.path.isdir(candidate_src):

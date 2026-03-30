@@ -2,13 +2,13 @@
 
 This page collects the normal operating sequences for `kbuild`.
 
-## Empty Directory To Scaffolded Repo
+## Empty Directory To Scaffolded Project
 
 1. Create starter config in the empty directory.
 2. Edit the config.
-3. Scaffold the repo.
+3. Scaffold the project.
 4. Initialize git if needed.
-5. Install local `vcpkg` if the repo uses it.
+5. Install local `vcpkg` if the project uses it.
 
 ```bash
 kbuild --kbuild-config
@@ -22,10 +22,10 @@ Notes:
 
 - `--kbuild-init` requires the directory to be otherwise empty except for
   `kbuild.json` and `.kbuild.json`.
-- scaffolded SDK repos include core CMake files, demo trees, test placeholders,
+- scaffolded SDK projects include core CMake files, demo trees, test placeholders,
   and optional `vcpkg/vcpkg.json`.
 
-## Existing Repo Day-To-Day
+## Existing Project Day-To-Day
 
 Normal build:
 
@@ -35,6 +35,8 @@ kbuild --build-latest
 
 Before the build starts, `kbuild` validates that the active backend does not
 see known generated residuals outside `build/`.
+For `cmake` projects, that includes source-tree configure/build output such as
+`CMakeCache.txt`, `CMakeFiles/`, and `build.ninja`.
 
 Fast rebuild from an existing cache:
 
@@ -70,9 +72,9 @@ Why order matters:
 - demos can consume SDK dependencies from `cmake.dependencies`
 - later demos can consume SDKs installed by earlier demos in the same run
 
-## Multi-Repo SDK Stack
+## Multi-Project SDK Stack
 
-Use one shared slot name across the related repos, then build dependencies
+Use one shared slot name across the related projects, then build dependencies
 before consumers.
 
 Example:
@@ -117,14 +119,14 @@ For later full syncs:
 kbuild --git-sync "Update project docs"
 ```
 
-`kbuild` refuses to use a parent git worktree for sync operations. The repo
+`kbuild` refuses to use a parent git worktree for sync operations. The git repo
 must be rooted at the current directory. It also refuses to sync when the
-active backend detects known generated residuals outside `build/`. Python repo
+active backend detects known generated residuals outside `build/`. Python project
 trees are also checked for `__pycache__/`, `*.pyc`, and `*.pyo`.
 
 ## Vcpkg Bring-Up
 
-For repos that define a `vcpkg` object:
+For projects that define a `vcpkg` object:
 
 ```bash
 kbuild --vcpkg-install

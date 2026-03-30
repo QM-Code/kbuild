@@ -20,13 +20,13 @@ def _require_non_cmake_backend_safe(
     has_vcpkg: bool,
 ) -> None:
     if configure_flag_seen:
-        errors.die(f"cmake configure options are not supported for {backend_name} repos")
+        errors.die(f"cmake configure options are not supported for {backend_name} projects")
     if cmake_jobs_override is not None:
-        errors.die(f"--cmake-jobs is not supported for {backend_name} repos")
+        errors.die(f"--cmake-jobs is not supported for {backend_name} projects")
     if cmake_linkage_override is not None:
-        errors.die(f"--cmake-linkage is not supported for {backend_name} repos")
+        errors.die(f"--cmake-linkage is not supported for {backend_name} projects")
     if install_vcpkg or has_vcpkg:
-        errors.die(f"vcpkg is not supported for {backend_name} repos")
+        errors.die(f"vcpkg is not supported for {backend_name} projects")
 
 
 def run_backend(
@@ -133,7 +133,9 @@ def find_unexpected_residuals(
     if backend_name is None:
         return None
 
-    if backend_name == "cargo":
+    if backend_name == "cmake":
+        finding = cmake_backend.find_unexpected_residuals(repo_root)
+    elif backend_name == "cargo":
         finding = cargo_backend.find_unexpected_residuals(repo_root)
     elif backend_name == "java":
         finding = java_backend.find_unexpected_residuals(repo_root)

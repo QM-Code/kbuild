@@ -17,18 +17,18 @@ Use this guide as a one-stop reference for:
 - building SDKs and demos
 - wiring multiple SDK dependencies
 - managing local `vcpkg`
-- running repo/git helper modes safely
+- running project/git helper modes safely
 
 ## 0) Agent Bootstrap Runbook
 
 ### Agent decision flow
 
-1. Confirm you are in the intended repo root.
-2. If `./.kbuild.json` is missing and the task is repo bootstrap, run
+1. Confirm you are in the intended project root.
+2. If `./.kbuild.json` is missing and the task is project bootstrap, run
    `kbuild --kbuild-config` and stop for config edits.
 3. If `./.kbuild.json` is missing for any other task, stop. This is not a valid
-   `kbuild` repo root.
-4. If the task is “scaffold repo”, run `kbuild --kbuild-init`.
+   `kbuild` project root.
+4. If the task is “scaffold project”, run `kbuild --kbuild-init`.
 5. If the task is “set up git remote”, run `kbuild --git-initialize`.
 6. If the effective config contains `vcpkg`, run `kbuild --vcpkg-install` once.
 7. For normal development builds, run `kbuild --build-latest`.
@@ -53,12 +53,12 @@ Use this guide as a one-stop reference for:
    `build/<version>/`, installs SDK artifacts into `build/<version>/sdk`, and
    optionally builds demos in order.
 
-2. Repo operations.
-   It can generate a starter config, scaffold a new repo layout, initialize git
+2. Project operations.
+   It can generate a starter config, scaffold a new project layout, initialize git
    against your configured remote, run a simple add/commit/push sync, and
-   batch-forward commands into child repos.
+   batch-forward commands into child targets.
 
-`kbuild` is strict by design. Unknown flags, unexpected JSON keys, missing repo
+`kbuild` is strict by design. Unknown flags, unexpected JSON keys, missing project
 markers, and path-traversal-like values are hard errors.
 
 ## 2) Non-Negotiable Rules
@@ -70,18 +70,21 @@ markers, and path-traversal-like values are hard errors.
 - Generated artifacts are expected to stay under `build/` directories. Known
   backend-specific residuals outside `build/` are hard errors for build and
   git-sync operations.
-- Python repo trees are also checked for `__pycache__/`, `*.pyc`, and `*.pyo`
+- In `cmake` projects, this includes source-tree configure/build artifacts such as
+  `CMakeCache.txt`, `CMakeFiles/`, `build.ninja`, `cmake_install.cmake`,
+  `CTestTestfile.cmake`, and `compile_commands.json`.
+- Python project trees are also checked for `__pycache__/`, `*.pyc`, and `*.pyo`
   outside `build/`.
 - `--git-sync` only operates on a repo rooted at the current directory and
   fails without local `./.git`.
-- `--batch` runs the remaining args inside child repos; with no inline repo
-  list it uses `batch.repos` from the effective config.
+- `--batch` runs the remaining args inside child targets; with no inline target
+  list it uses `batch.targets` from the effective config.
 
 ## 3) Config Model
 
 `kbuild` reads:
 
-- `./.kbuild.json` as the required repo marker and primary config
+- `./.kbuild.json` as the required project marker and primary config
 - `./kbuild.json` as an optional shared base config
 
 Merge behavior:
@@ -242,23 +245,23 @@ remote.
 
 ### `--git-sync <msg>`
 
-Runs `git add -A`, commits if needed, and pushes in the repo rooted at the
+Runs `git add -A`, commits if needed, and pushes in the git repo rooted at the
 current directory.
 
 Before the sync starts, `kbuild` runs backend-specific hygiene checks and
 refuses to sync if known generated residuals appear outside `build/`.
 
-### `--batch [repo ...]`
+### `--batch [target ...]`
 
-Runs the remaining command-line args in each target repo, in order.
+Runs the remaining command-line args in each target directory, in order.
 
 Behavior:
 
-- With inline repo args, uses those repo paths relative to the current repo
-  root.
-- With no inline repo args, uses `batch.repos` from the effective config.
-- Each target repo must contain `./.kbuild.json`.
-- The shared `kbuild` entrypoint is reused for each child repo.
+- With inline target args, uses those target paths relative to the current
+  project root.
+- With no inline target args, uses `batch.targets` from the effective config.
+- Each target directory must contain `./.kbuild.json`.
+- The shared `kbuild` entrypoint is reused for each child target.
 
 ### `--vcpkg`
 
@@ -271,7 +274,7 @@ Reads `./vcpkg/src` HEAD commit hash and writes it into
 
 ### `--vcpkg-install`
 
-Ensures local vcpkg checkout/bootstrap under repo-local `./vcpkg/src`, ensures
+Ensures local vcpkg checkout/bootstrap under project-local `./vcpkg/src`, ensures
 local cache directories under `./vcpkg/build`, syncs baseline, then continues
 normal build flow.
 
@@ -339,7 +342,7 @@ normal build flow.
     }
   },
   "batch": {
-    "repos": [
+    "targets": [
       "kcli",
       "ktrace"
     ]
@@ -392,7 +395,7 @@ normal build flow.
 
 ### `batch`
 
-- `repos`: optional array of relative child-repo paths
+- `targets`: optional array of relative child-target paths
 
 ## 8) Demo Orchestration
 
@@ -411,9 +414,9 @@ This means demo order can intentionally represent dependency layering.
 When `vcpkg` config exists and build mode runs:
 
 - local vcpkg must exist at `./vcpkg/src` and be bootstrapped
-- toolchain is forced via the repo-local vcpkg toolchain file
+- toolchain is forced via the project-local vcpkg toolchain file
 - `VCPKG_ROOT` is set to the local checkout
-- repo-local downloads and binary-cache directories are created as needed
+- project-local downloads and binary-cache directories are created as needed
 - demo builds inherit the same core-build `installed/<triplet>` prefix
 
 `--vcpkg-install` performs initial clone/bootstrap and baseline sync.
@@ -450,7 +453,7 @@ files.
 
 ## 11) Common Failure Cases
 
-### `current directory is not a valid kbuild repo root`
+### `current directory is not a valid kbuild project root`
 
 Create the primary config first:
 

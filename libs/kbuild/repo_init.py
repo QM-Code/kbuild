@@ -36,7 +36,7 @@ def load_initialize_repo_config(repo_root: str) -> dict[str, object]:
     if non_cmake_backends:
         backend_list = ", ".join(sorted(non_cmake_backends))
         errors.die(
-            "kbuild --kbuild-init currently scaffolds only CMake-based repos.\n"
+            "kbuild --kbuild-init currently scaffolds only CMake-based projects.\n"
             f"Configured non-CMake backend sections:\n  {backend_list}"
         )
 

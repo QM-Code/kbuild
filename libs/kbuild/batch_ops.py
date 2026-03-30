@@ -10,76 +10,76 @@ def _canonical_path(path: str) -> str:
     return os.path.normcase(os.path.realpath(path))
 
 
-def _load_batch_repo_tokens(repo_root: str, inline_repo_tokens: list[str]) -> list[str]:
-    if inline_repo_tokens:
-        return inline_repo_tokens
+def _load_batch_target_tokens(project_root: str, inline_target_tokens: list[str]) -> list[str]:
+    if inline_target_tokens:
+        return inline_target_tokens
 
-    config_repo_tokens = config_ops.load_batch_repos(repo_root)
-    if config_repo_tokens:
-        return config_repo_tokens
+    config_target_tokens = config_ops.load_batch_targets(project_root)
+    if config_target_tokens:
+        return config_target_tokens
 
     errors.die(
-        "no batch repos were specified.\n"
-        "Provide repo paths after '--batch' or define 'batch.repos' in the kbuild config.",
+        "no batch targets were specified.\n"
+        "Provide target paths after '--batch' or define 'batch.targets' in the kbuild config.",
         code=1,
     )
 
 
-def _resolve_batch_targets(repo_root: str, repo_tokens: list[str]) -> list[tuple[str, str]]:
-    repo_root_canonical = _canonical_path(repo_root)
+def _resolve_batch_targets(project_root: str, target_tokens: list[str]) -> list[tuple[str, str]]:
+    project_root_canonical = _canonical_path(project_root)
     resolved_targets: list[tuple[str, str]] = []
 
-    for repo_token in repo_tokens:
-        repo_abs = os.path.abspath(os.path.join(repo_root, repo_token))
-        repo_canonical = _canonical_path(repo_abs)
-        if repo_canonical != repo_root_canonical and not repo_canonical.startswith(repo_root_canonical + os.sep):
+    for target_token in target_tokens:
+        target_abs = os.path.abspath(os.path.join(project_root, target_token))
+        target_canonical = _canonical_path(target_abs)
+        if target_canonical != project_root_canonical and not target_canonical.startswith(project_root_canonical + os.sep):
             errors.die(
-                f"batch repo path resolves outside the current repo root:\n"
-                f"  token: {repo_token}\n"
-                f"  resolved: {repo_abs}",
+                f"batch target path resolves outside the current project root:\n"
+                f"  token: {target_token}\n"
+                f"  resolved: {target_abs}",
                 code=1,
             )
-        if not os.path.isdir(repo_abs):
+        if not os.path.isdir(target_abs):
             errors.die(
-                f"batch repo path does not exist or is not a directory:\n"
-                f"  token: {repo_token}\n"
-                f"  resolved: {repo_abs}",
+                f"batch target path does not exist or is not a directory:\n"
+                f"  token: {target_token}\n"
+                f"  resolved: {target_abs}",
                 code=1,
             )
 
-        local_config_path = os.path.join(repo_abs, config_ops.LOCAL_KBUILD_CONFIG_FILENAME)
+        local_config_path = os.path.join(target_abs, config_ops.LOCAL_KBUILD_CONFIG_FILENAME)
         if not os.path.isfile(local_config_path):
             errors.die(
-                f"batch repo is missing './{config_ops.LOCAL_KBUILD_CONFIG_FILENAME}':\n"
-                f"  token: {repo_token}\n"
-                f"  resolved: {repo_abs}",
+                f"batch target is missing './{config_ops.LOCAL_KBUILD_CONFIG_FILENAME}':\n"
+                f"  token: {target_token}\n"
+                f"  resolved: {target_abs}",
                 code=1,
             )
-        resolved_targets.append((repo_token, repo_abs))
+        resolved_targets.append((target_token, target_abs))
 
     return resolved_targets
 
 
 def run_batch(
-    repo_root: str,
+    project_root: str,
     forwarded_args: list[str],
-    inline_repo_tokens: list[str],
+    inline_target_tokens: list[str],
     *,
     entrypoint_path: str,
 ) -> int:
-    repo_tokens = _load_batch_repo_tokens(repo_root, inline_repo_tokens)
-    targets = _resolve_batch_targets(repo_root, repo_tokens)
+    target_tokens = _load_batch_target_tokens(project_root, inline_target_tokens)
+    targets = _resolve_batch_targets(project_root, target_tokens)
 
-    for index, (repo_token, repo_abs) in enumerate(targets, start=1):
-        print(f"[batch {index}/{len(targets)}] {repo_token}", flush=True)
+    for index, (target_token, target_abs) in enumerate(targets, start=1):
+        print(f"[batch {index}/{len(targets)}] {target_token}", flush=True)
         result = subprocess.run(
             [sys.executable, entrypoint_path, *forwarded_args],
-            cwd=repo_abs,
+            cwd=target_abs,
             check=False,
         )
         if result.returncode != 0:
             errors.emit_error(
-                f"batch command failed in '{repo_token}' with exit code {result.returncode}"
+                f"batch command failed in '{target_token}' with exit code {result.returncode}"
             )
             return result.returncode
 

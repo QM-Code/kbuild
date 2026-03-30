@@ -37,7 +37,7 @@ KBUILD_OPTION_LINES = [
 ]
 
 BATCH_OPTION_LINES = [
-    ("--batch [repo ...]", "run the remaining args in each listed repo; with no repos uses config batch.repos"),
+    ("--batch [target ...]", "run the remaining args in each listed target; with no targets uses config batch.targets"),
 ]
 
 BUILD_OPTION_LINES = [
@@ -144,7 +144,7 @@ def run(cmd: list[str], *, env: dict[str, str] | None = None) -> None:
 
 def extract_batch_args(args: list[str]) -> tuple[bool, list[str], list[str]]:
     batch_requested = False
-    batch_repo_tokens: list[str] = []
+    batch_target_tokens: list[str] = []
     forwarded_args: list[str] = []
 
     i = 0
@@ -160,13 +160,13 @@ def extract_batch_args(args: list[str]) -> tuple[bool, list[str], list[str]]:
         batch_requested = True
         i += 1
         while i < len(args) and not args[i].startswith("-"):
-            repo_token = args[i].strip()
-            if not repo_token:
-                fail("batch repo paths must be non-empty")
-            batch_repo_tokens.append(repo_token)
+            target_token = args[i].strip()
+            if not target_token:
+                fail("batch target paths must be non-empty")
+            batch_target_tokens.append(target_token)
             i += 1
 
-    return batch_requested, batch_repo_tokens, forwarded_args
+    return batch_requested, batch_target_tokens, forwarded_args
 
 
 def main(
@@ -182,13 +182,13 @@ def main(
     if not args:
         usage(0)
 
-    batch_requested, batch_repo_tokens, forwarded_args = extract_batch_args(args)
+    batch_requested, batch_target_tokens, forwarded_args = extract_batch_args(args)
     if batch_requested:
         entrypoint_path = os.path.join(os.path.dirname(templates_root), "kbuild.py")
         return batch_ops.run_batch(
             repo_root,
             forwarded_args,
-            batch_repo_tokens,
+            batch_target_tokens,
             entrypoint_path=entrypoint_path,
         )
 

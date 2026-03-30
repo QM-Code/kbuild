@@ -7,11 +7,11 @@ option-by-option reference, see [kbuild.md](kbuild.md).
 
 | Group | Purpose |
 | --- | --- |
-| bootstrap | create starter config and scaffold a repo rooted at the current directory |
+| bootstrap | create starter config and scaffold a project rooted at the current directory |
 | build | configure, build, and install the core SDK/app and optionally demos |
 | clean | remove retained build slots safely |
-| git | initialize or sync a repo rooted at the current directory |
-| vcpkg | prepare repo-local `vcpkg` and sync the manifest baseline |
+| git | initialize or sync a git repo rooted at the current directory |
+| vcpkg | prepare project-local `vcpkg` and sync the manifest baseline |
 
 ## Bootstrap Commands
 
@@ -23,7 +23,7 @@ kbuild --kbuild-init
 What they do:
 
 - `--kbuild-config` creates a starter `./.kbuild.json`.
-- `--kbuild-init` scaffolds a new repo from the effective kbuild config.
+- `--kbuild-init` scaffolds a new project from the effective kbuild config.
 
 ## Build Commands
 
@@ -53,7 +53,9 @@ Important behavior:
 - Demo output is `demo/<demo>/build/<slot>/`.
 - `kbuild` refuses the build if the active backend finds known generated
   residuals outside `build/`.
-- Python repo trees are also checked for `__pycache__/`, `*.pyc`, and `*.pyo`
+- in `cmake` projects that includes source-tree configure/build artifacts such as
+  `CMakeCache.txt`, `CMakeFiles/`, `build.ninja`, and `cmake_install.cmake`
+- Python project trees are also checked for `__pycache__/`, `*.pyc`, and `*.pyo`
   outside `build/`.
 - `--build-demos` with no demo names uses `build.demos`.
 - `--build-latest` can auto-build demos from `build.defaults.demos`.
@@ -115,7 +117,7 @@ kbuild --vcpkg-sync-baseline
 Important behavior:
 
 - `--vcpkg-install` clones or verifies `./vcpkg/src`, bootstraps it, ensures
-  repo-local cache directories, syncs the manifest baseline, then continues the
+  project-local cache directories, syncs the manifest baseline, then continues the
   normal build flow.
 - `--vcpkg-sync-baseline` updates `vcpkg/vcpkg.json` from the current
   `./vcpkg/src` HEAD commit.

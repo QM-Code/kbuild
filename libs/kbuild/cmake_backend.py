@@ -7,9 +7,51 @@ from . import errors
 from . import vcpkg_ops
 from .config_ops import KbuildConfig
 
+_RESIDUAL_DIR_NAMES = {
+    "CMakeFiles",
+    "Testing",
+}
+
+_RESIDUAL_FILE_NAMES = {
+    ".ninja_deps",
+    ".ninja_log",
+    "build.ninja",
+    "CMakeCache.txt",
+    "cmake_install.cmake",
+    "compile_commands.json",
+    "CPackConfig.cmake",
+    "CPackSourceConfig.cmake",
+    "CTestTestfile.cmake",
+    "install_manifest.txt",
+    "Makefile",
+    "rules.ninja",
+}
+
 
 def _run(cmd: list[str], *, env: dict[str, str] | None = None) -> None:
     subprocess.run(cmd, check=True, env=env)
+
+
+def find_unexpected_residuals(repo_root: str) -> tuple[str, list[str]] | None:
+    findings: list[str] = []
+    for current_root, dirnames, filenames in os.walk(repo_root):
+        kept_dirnames: list[str] = []
+        for dirname in sorted(dirnames):
+            if dirname in (".git", "build"):
+                continue
+            if dirname in _RESIDUAL_DIR_NAMES:
+                findings.append(os.path.join(current_root, dirname))
+                continue
+            kept_dirnames.append(dirname)
+        dirnames[:] = kept_dirnames
+
+        for filename in sorted(filenames):
+            if filename in _RESIDUAL_FILE_NAMES:
+                findings.append(os.path.join(current_root, filename))
+
+    if not findings:
+        return None
+    return ("CMake build artifacts", findings)
 
 
 def build_repo(

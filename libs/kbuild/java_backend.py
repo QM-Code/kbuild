@@ -151,7 +151,7 @@ def _resolve_java_dependency_classpath(
                 "Java dependency classes directory does not exist.\n"
                 f"Dependency: {dependency_name}\n"
                 f"Expected:\n  {candidate_path}\n"
-                "Build the dependency repo first for the same slot."
+                "Build the dependency component first for the same slot."
             )
         resolved.append(candidate_path)
     return resolved

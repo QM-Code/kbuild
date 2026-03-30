@@ -1,14 +1,14 @@
 # Kbuild Documentation
 
-`kbuild` is a strict Python build and repo orchestration tool for ktools-style
-projects. It handles five related jobs:
+`kbuild` is a strict Python build and project orchestration tool for
+ktools-style workspaces and components. It handles five related jobs:
 
-- creating and validating repo-local kbuild config
+- creating and validating project-local kbuild config
 - building core targets into named build slots
 - building ordered demo trees against the core SDK and dependency SDKs
-- scaffolding and helper operations such as repo initialization, git setup, and
-  repo-local `vcpkg`
-- batch-forwarding commands into child repos
+- scaffolding and helper operations such as project initialization, git setup,
+  and project-local `vcpkg`
+- batch-forwarding commands into child targets
 
 ## Start Here
 
@@ -29,7 +29,7 @@ kbuild --kbuild-init
 kbuild --vcpkg-install
 ```
 
-Existing repo:
+Existing project:
 
 ```bash
 kbuild --build-latest
@@ -37,7 +37,7 @@ kbuild --build-demos
 kbuild --clean-latest
 ```
 
-`kbuild` selects exactly one backend from the repo config. The shared tree
+`kbuild` selects exactly one backend from the project config. The shared tree
 currently supports:
 
 - `cmake`
@@ -50,13 +50,13 @@ currently supports:
 
 ## Core Concepts
 
-`Repo root`
+`Project root`
 
 - `kbuild` only runs from a directory containing `./.kbuild.json`.
 
 `Primary config`
 
-- `./.kbuild.json` is the required repo marker and primary config file.
+- `./.kbuild.json` is the required project marker and primary config file.
 
 `Optional shared base`
 
@@ -69,12 +69,14 @@ currently supports:
 - Demo builds live under `demo/<demo>/build/<slot>/`.
 - The default slot is `latest`.
 
-`Repo hygiene`
+`Project hygiene`
 
 - backend-specific generated artifacts are expected to stay under `build/`
 - `kbuild` refuses build and git-sync operations when known residuals appear
   outside those directories
-- Python repos are also checked for `__pycache__/`, `*.pyc`, and `*.pyo`
+- for `cmake` projects this includes source-tree configure/build artifacts such as
+  `CMakeCache.txt`, `CMakeFiles/`, `build.ninja`, and `cmake_install.cmake`
+- Python projects are also checked for `__pycache__/`, `*.pyc`, and `*.pyo`
   outside `build/`
 
 `SDK-first demos`
@@ -83,18 +85,18 @@ currently supports:
 - Demos consume that SDK, optional dependency SDKs, and optionally earlier demo
   SDK outputs in the requested order.
 
-`Repo-local vcpkg`
+`Project-local vcpkg`
 
-- When the effective config defines `vcpkg`, `kbuild` expects a repo-local
+- When the effective config defines `vcpkg`, `kbuild` expects a project-local
   checkout under `./vcpkg/src` and integrates it through CMake manifest mode.
 
 ## Which Command Should I Reach For?
 
 - Use `kbuild --build-latest` for the normal build path.
 - Use `kbuild --build-demos` when you want explicit demo validation.
-- Use `kbuild --cmake-no-configure` only for `cmake` repos when the target build directory
+- Use `kbuild --cmake-no-configure` only for `cmake` projects when the target build directory
   already contains `CMakeCache.txt`.
-- Use `kbuild --vcpkg-install` only for `cmake` repos the first time a repo-local `vcpkg` project is
+- Use `kbuild --vcpkg-install` only for `cmake` projects the first time a project-local `vcpkg` checkout is
   prepared.
 - Use `kbuild --git-initialize` only once, after scaffold generation and remote
   creation.

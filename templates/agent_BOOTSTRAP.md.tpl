@@ -13,8 +13,8 @@ Familiarize yourself with this project by reading:
 If the task touches a subproject, demo, package, or example that has its own
 `README.md`, read that local `README.md` before making changes there.
 
-If the task crosses repo boundaries, read the top-level `README.md` in each
-target repo before editing.
+If the task crosses component boundaries, read the top-level `README.md` in
+each target before editing.
 
 ## Projects
 
@@ -29,7 +29,7 @@ If you notice issues or have recommendations about the codebase, bring them to t
 ## Building with kbuild
 
 - Always use `kbuild` for builds. Do not use raw `cmake` commands for normal build flows.
-- Always run from the repo root, invoking `kbuild` from that directory.
+- Always run from the project root, invoking `kbuild` from that directory.
 - Use `kbuild --help` to inspect the available options.
 - `kbuild` with no arguments also prints usage; it does not build.
 - `kbuild --build-latest` builds the core SDK/app into `build/latest/` and then builds demos listed in `build.defaults.demos` (if defined).

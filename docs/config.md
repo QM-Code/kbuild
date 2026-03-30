@@ -2,7 +2,7 @@
 
 `kbuild` reads up to two JSON files:
 
-- `.kbuild.json`: required repo marker and primary config
+- `.kbuild.json`: required project marker and primary config
 - `kbuild.json`: optional shared base config
 
 At runtime, `kbuild` deep-merges `.kbuild.json` on top of `kbuild.json` when
@@ -81,12 +81,12 @@ Representative full example:
 | `kotlin` | no | Kotlin source/test/demo layout and classpath dependencies |
 | `csharp` | no | C# source/test/demo layout and assembly settings |
 | `javascript` | no | JavaScript/Node source snapshot, tests, dependencies, and demo launchers |
-| `vcpkg` | no | repo-local `vcpkg` manifest dependencies |
+| `vcpkg` | no | project-local `vcpkg` manifest dependencies |
 | `build` | no | job count, linkage defaults, and demo lists |
-| `batch` | no | relative child-repo list for `--batch` |
+| `batch` | no | relative child-target list for `--batch` |
 
 Unknown top-level keys are rejected.
-Exactly one backend section may be defined in a repo config.
+Exactly one backend section may be defined in a project config.
 
 ## Project Settings
 
@@ -113,7 +113,7 @@ Exactly one backend section may be defined in a repo config.
 
 ## CMake Settings
 
-If `cmake` is selected as the repo backend, `kbuild` uses the CMake flow.
+If `cmake` is selected as the active backend, `kbuild` uses the CMake flow.
 
 `cmake.minimum_version`
 
@@ -241,7 +241,7 @@ prefix to contain:
 
 `javascript.test_globs`
 
-- optional array of repo-relative test globs passed to `node --test`
+- optional array of project-relative test globs passed to `node --test`
 - when present, `kbuild` also writes `build/<slot>/tests/run-tests`
 
 `javascript.dependencies`
@@ -258,7 +258,7 @@ prefix to contain:
 - each demo entry currently supports:
   - `entry`
   - `output`
-- `entry` is the repo-relative Node entry script
+- `entry` is the project-relative Node entry script
 - `output` is the generated launcher file name under `demo/<demo>/build/<slot>/`
 
 `kotlin.dependencies`
@@ -300,7 +300,7 @@ prefix to contain:
 - optional array of package names written into `vcpkg/vcpkg.json` during
   scaffold generation
 
-If the `vcpkg` object is present, build flow expects repo-local setup under:
+If the `vcpkg` object is present, build flow expects project-local setup under:
 
 - `vcpkg/src`
 - `vcpkg/build`
@@ -327,7 +327,7 @@ If the `vcpkg` object is present, build flow expects repo-local setup under:
 ## Local Overlay Behavior
 
 If you want a shared committed base config, keep it in `kbuild.json` and put
-machine-specific or repo-local overrides in `.kbuild.json`.
+machine-specific or project-local overrides in `.kbuild.json`.
 
 If you do not need that split, define the entire config in `.kbuild.json` and
 omit `kbuild.json` entirely.
